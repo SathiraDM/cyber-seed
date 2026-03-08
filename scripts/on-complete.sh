@@ -72,7 +72,8 @@ if [[ $RCLONE_EXIT -eq 0 ]]; then
     rm -rf "$CONTENT_PATH"
     log "Local files deleted."
 
-    # Remove torrent from qBittorrent (files already deleted)
+    # Remove torrent from qBittorrent via API
+    # (localhost is whitelisted in qBittorrent — no auth needed for 127.0.0.1)
     if [[ -n "$TORRENT_HASH" ]]; then
         curl -sf --max-time 10 \
             --data "hashes=${TORRENT_HASH}&deleteFiles=false" \

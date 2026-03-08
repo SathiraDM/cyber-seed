@@ -89,6 +89,9 @@ inject_setting "Preferences" "Downloads\\TempPathEnabled"  "true"
 
 # ── Web UI: accept connections from any IP ────────────────────────────
 inject_setting "Preferences" "WebUI\\Address" "*"
+# Bypass auth for localhost so on-complete.sh can call the API from inside the container
+inject_setting "Preferences" "WebUI\\AuthSubnetWhitelistEnabled" "true"
+inject_setting "Preferences" "WebUI\\AuthSubnetWhitelist" "127.0.0.1/32"
 
 # ── Web UI: set username + hashed password from env ───────────────────
 if [[ -n "${QBT_WEBUI_PASS:-}" ]]; then
