@@ -1,0 +1,28 @@
+# Environment — contains credentials, never commit
+.env
+
+# rclone config — contains OAuth tokens (keep the dir, not the secrets)
+config/rclone/*
+!config/rclone/.gitkeep
+
+# qBittorrent config — contains credentials + state
+config/qbittorrent/*
+!config/qbittorrent/.gitkeep
+
+# Downloaded files
+downloads/incomplete/*
+downloads/completed/*
+!downloads/incomplete/.gitkeep
+!downloads/completed/.gitkeep
+
+# Upload logs
+logs/*
+!logs/.gitkeep
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp

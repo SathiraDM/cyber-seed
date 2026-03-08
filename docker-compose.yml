@@ -1,0 +1,45 @@
+services:
+  qbittorrent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyber-seed-qbt
+    environment:
+      # Linux user/group IDs — run `id` on host to get yours
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      # qBittorrent Web UI port (inside container is always 8080)
+      - WEBUI_PORT=8080
+      # rclone config path (inside container)
+      - RCLONE_CONFIG=/config/rclone/rclone.conf
+      # OneDrive remote name (set during setup.sh)
+      - ONEDRIVE_REMOTE=${ONEDRIVE_REMOTE:-onedrive}
+      # Target path on OneDrive/SharePoint
+      - ONEDRIVE_PATH=${ONEDRIVE_PATH:-/Torrents}
+    volumes:
+      # qBittorrent config (persisted on host)
+      - ./config/qbittorrent:/config
+      # rclone config (persisted on host, separate for easy backup)
+      - ./config/rclone:/config/rclone
+      # Downloads: incomplete + completed folders
+      - ${DOWNLOADS_PATH:-./downloads}:/downloads
+      # Completion script (read-only mount)
+      - ./scripts/on-complete.sh:/scripts/on-complete.sh:ro
+      # Custom init script to inject qBittorrent AutoRun settings
+      - ./scripts/init-qbt.sh:/custom-cont-init.d/99-init-qbt.sh:ro
+      # Upload logs
+      - ./logs:/logs
+    ports:
+      # Web UI
+      - "${WEBUI_PORT:-8080}:8080"
+      # Torrent traffic (TCP + UDP)
+      - "${TORRENT_PORT:-6881}:6881"
+      - "${TORRENT_PORT:-6881}:6881/udp"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
