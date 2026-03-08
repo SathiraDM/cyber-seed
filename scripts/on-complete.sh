@@ -7,12 +7,12 @@
 #    %N  → Torrent name
 #    %F  → Content path (file for single-file, folder for multi-file)
 #    %D  → Save path (the download directory)
+#    %I  → Info hash (used to remove torrent via API after upload)
 #    %L  → Category
-#    %I  → Info hash
 #
 #  Configured in qBittorrent:
 #    Tools > Options > Downloads > Run external program on torrent finish:
-#    /scripts/on-complete.sh "%N" "%F" "%D"
+#    /bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"
 # ─────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -20,11 +20,13 @@ set -euo pipefail
 TORRENT_NAME="${1:-unknown}"
 CONTENT_PATH="${2:-}"
 SAVE_PATH="${3:-}"
+TORRENT_HASH="${4:-}"
 
 # ── Config (injected via docker-compose environment) ─────────────────
 REMOTE="${ONEDRIVE_REMOTE:-onedrive}"
 REMOTE_PATH="${ONEDRIVE_PATH:-/Torrents}"
 RCLONE_CONF="${RCLONE_CONFIG:-/config/rclone/rclone.conf}"
+QBT_URL="http://localhost:8080"
 LOG_FILE="/logs/upload.log"
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -69,6 +71,15 @@ if [[ $RCLONE_EXIT -eq 0 ]]; then
     log "Removing local   : $CONTENT_PATH"
     rm -rf "$CONTENT_PATH"
     log "Local files deleted."
+
+    # Remove torrent from qBittorrent (files already deleted)
+    if [[ -n "$TORRENT_HASH" ]]; then
+        curl -sf --max-time 10 \
+            --data "hashes=${TORRENT_HASH}&deleteFiles=false" \
+            "${QBT_URL}/api/v2/torrents/delete" &>/dev/null \
+            && log "Torrent removed from qBittorrent: $TORRENT_HASH" \
+            || log "WARN: Could not remove torrent from qBittorrent (non-fatal)."
+    fi
 else
     log "UPLOAD FAILED    : $TORRENT_NAME (rclone exit $RCLONE_EXIT)"
     log "Files kept locally for retry. Check logs: $LOG_FILE"

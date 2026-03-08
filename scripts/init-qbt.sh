@@ -63,7 +63,7 @@ CONF_FILE="$CONF_FILE" python3 - <<PYEOF
 import configparser, os
 
 conf_file = os.environ['CONF_FILE']
-cmd = '/bin/bash /scripts/on-complete.sh "%N" "%F" "%D"'
+cmd = '/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
 
 config = configparser.RawConfigParser()
 config.optionxform = str  # preserve case
