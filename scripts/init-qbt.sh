@@ -94,8 +94,9 @@ LOGIN=$(curl -sf --max-time 10 \
     "${QBT_URL}/api/v2/auth/login" 2>&1)
 echo "[init-qbt-api] Login response: $LOGIN" >> "$LOG"
 
-# Set AutoRun preferences
-    JSON="{\"autorun_enabled\":true,\"autorun_program\":\"${CMD}\"}"
+# Set AutoRun preferences (use python3 to safely JSON-encode CMD which contains quotes)
+JSON=$(CMD="$CMD" python3 -c "import json,os; print(json.dumps({'autorun_enabled': True, 'autorun_program': os.environ['CMD']}))")
+
 RESPONSE=$(curl -sf --max-time 10 \
     -b "$COOKIE_JAR" \
     -X POST "${QBT_URL}/api/v2/app/setPreferences" \
