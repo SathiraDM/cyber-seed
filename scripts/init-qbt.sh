@@ -68,17 +68,19 @@ chmod 600 "$CONF_FILE"
 echo "[init-qbt] Base config written. Spawning API configurator in background..."
 
 # ── Background: wait for API, then set AutoRun via setPreferences ─────
-# This runs AFTER qBittorrent has fully started, so it uses the correct
-# internal key names regardless of qBittorrent version.
-(
-    AUTORUN_CMD='/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
+# Uses setsid to create a new process session so s6-overlay doesn't
+# kill this background job when the init script's process group is reaped.
+LOG=/config/init-qbt-api.log
+setsid bash -c '
+    QBT_URL="http://localhost:8080"
+    AUTORUN_CMD="/bin/bash /scripts/on-complete.sh \"%N\" \"%F\" \"%D\" \"%I\""
     LOG=/config/init-qbt-api.log
 
-    echo "[init-qbt-api] Waiting for qBittorrent API at ${QBT_URL} ..." | tee -a "$LOG"
+    echo "[init-qbt-api] Waiting for qBittorrent API at ${QBT_URL} ..."
 
     for i in $(seq 1 60); do
         if curl -sf --max-time 3 "${QBT_URL}/api/v2/app/version" >/dev/null 2>&1; then
-            echo "[init-qbt-api] API is up (attempt $i)." | tee -a "$LOG"
+            echo "[init-qbt-api] API is up (attempt $i)."
             break
         fi
         sleep 3
@@ -92,14 +94,14 @@ echo "[init-qbt] Base config written. Spawning API configurator in background...
     EXIT=$?
 
     if [[ $EXIT -eq 0 ]]; then
-        echo "[init-qbt-api] AutoRun configured via API: ${AUTORUN_CMD}" | tee -a "$LOG"
+        echo "[init-qbt-api] AutoRun configured via API: ${AUTORUN_CMD}"
     else
-        echo "[init-qbt-api] ERROR: setPreferences failed (exit $EXIT): $RESPONSE" | tee -a "$LOG"
+        echo "[init-qbt-api] ERROR: setPreferences failed (exit $EXIT): $RESPONSE"
     fi
 
     # Verify it took effect
     PREFS=$(curl -sf --max-time 5 "${QBT_URL}/api/v2/app/preferences" 2>/dev/null)
-    echo "[init-qbt-api] Verify autorun_program: $(echo "$PREFS" | grep -o '"autorun_on_torrent_finish_program":"[^"]*"')" | tee -a "$LOG"
-) &
+    echo "[init-qbt-api] Verify: $(echo "$PREFS" | grep -o '"autorun_on_torrent_finish_program":"[^"]*"')"
+' >>"$LOG" 2>&1 &
 
-echo "[init-qbt] init-qbt.sh complete. API configurator running in background (PID $!)."
+echo "[init-qbt] init-qbt.sh complete. API configurator detached (setsid PID $!)."
