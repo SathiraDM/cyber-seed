@@ -93,49 +93,47 @@ echo ""
 RCLONE_CONF_HOST="$(pwd)/config/rclone/rclone.conf"
 
 if [[ "$HEADLESS_CHOICE" == "2" ]]; then
-    # ── Headless: generate token on another machine ───────────────────
+    # ── Headless: full rclone config on another machine ───────────────
     echo -e "${YELLOW}Headless authentication flow:${NC}"
     echo ""
-    echo "  On a machine WITH a browser (laptop, desktop), run:"
-    echo -e "  ${CYAN}docker run --rm rclone/rclone authorize \"onedrive\"${NC}"
+    echo "  On a machine WITH a browser (your laptop / desktop):"
     echo ""
-    echo "  Follow the browser prompt, then paste the token JSON below."
-    echo "  (It looks like: {\"access_token\":\"...\",\"token_type\":\"Bearer\",...})"
+    echo "  1) Install rclone if needed:"
+    echo -e "     ${CYAN}brew install rclone${NC}          # macOS"
+    echo -e "     ${CYAN}sudo apt install rclone${NC}      # Ubuntu/Debian"
     echo ""
-    read -rp "Paste token JSON here: " RCLONE_TOKEN
-
-    if [[ -z "$RCLONE_TOKEN" ]]; then
-        error "No token provided. Re-run setup.sh when ready."
-    fi
-
-    # Write rclone.conf manually
-    mkdir -p config/rclone
-
+    echo "  2) Run the full interactive config wizard:"
+    echo -e "     ${CYAN}rclone config${NC}"
+    echo ""
+    echo "     Follow the prompts:"
+    echo "       n  → New remote"
+    echo "       Name: ${REMOTE_NAME}"
+    echo "       Type: onedrive  (Microsoft OneDrive)"
+    echo "       Leave client_id and client_secret BLANK (press Enter)"
     if [[ "$OD_TYPE" == "2" ]]; then
-        # SharePoint requires drive_type = sharepoint
-        cat > "$RCLONE_CONF_HOST" <<EOF
-[$REMOTE_NAME]
-type = onedrive
-token = $RCLONE_TOKEN
-drive_type = sharepoint
-EOF
-        echo ""
-        warn "For SharePoint you also need the drive_id."
-        echo "  Run this to list your SharePoint sites:"
-        echo -e "  ${CYAN}docker run --rm -v $(pwd)/config/rclone:/config/rclone rclone/rclone --config /config/rclone/rclone.conf onedrive sites${NC}"
-        echo ""
-        read -rp "SharePoint drive_id (leave blank to skip and set manually): " SP_DRIVE_ID
-        if [[ -n "$SP_DRIVE_ID" ]]; then
-            echo "drive_id = $SP_DRIVE_ID" >> "$RCLONE_CONF_HOST"
-        fi
+        echo "       Choose SharePoint when asked for drive type"
+        echo "       Select your SharePoint site from the list"
     else
-        cat > "$RCLONE_CONF_HOST" <<EOF
-[$REMOTE_NAME]
-type = onedrive
-token = $RCLONE_TOKEN
-drive_type = personal
-EOF
+        echo "       Choose 'OneDrive Personal' when asked for drive type"
     fi
+    echo "       Browser will open → sign in → Approve"
+    echo "       Confirm the drive selection → y → q (quit)"
+    echo ""
+    echo "  3) Copy the entire config block it created:"
+    echo -e "     ${CYAN}cat ~/.config/rclone/rclone.conf${NC}"
+    echo ""
+    echo "  4) Paste the ENTIRE contents of rclone.conf below."
+    echo "     It starts with [${REMOTE_NAME}] and contains token, drive_id, drive_type, etc."
+    echo ""
+    echo -e "  ${YELLOW}Paste rclone.conf contents below, then press Ctrl+D on a blank line:${NC}"
+    mkdir -p config/rclone
+    RCLONE_CONF_PASTE=$(cat)
+
+    if [[ -z "$RCLONE_CONF_PASTE" ]]; then
+        error "No config provided. Re-run setup.sh when ready."
+    fi
+
+    echo "$RCLONE_CONF_PASTE" > "$RCLONE_CONF_HOST"
     chmod 600 "$RCLONE_CONF_HOST"
     success "rclone.conf written."
 
