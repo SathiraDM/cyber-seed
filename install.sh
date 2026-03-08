@@ -117,7 +117,7 @@ create_dirs() {
 
 # ── Make scripts executable ───────────────────────────────────────────
 fix_permissions() {
-    chmod +x scripts/on-complete.sh scripts/init-qbt.sh setup.sh start.sh stop.sh install.sh
+    chmod +x scripts/on-complete.sh scripts/init-qbt.sh setup.sh start.sh stop.sh install.sh firewall.sh
     success "Script permissions set."
 }
 
@@ -133,7 +133,8 @@ echo -e "${GREEN}  Installation complete!${NC}"
 echo -e "${GREEN}══════════════════════════════════════════${NC}"
 echo ""
 echo "  Next steps:"
-echo -e "    1. ${YELLOW}./setup.sh${NC}   ← Configure OneDrive + credentials"
-echo -e "    2. ${YELLOW}./start.sh${NC}   ← Launch the stack"
-echo -e "    3. Open ${CYAN}http://$(hostname -I | awk '{print $1}'):8080${NC} in your browser"
+echo -e "    1. ${YELLOW}./setup.sh${NC}     ← Configure OneDrive + credentials"
+echo -e "    2. ${YELLOW}./firewall.sh${NC}  ← Open ports (GCP / ufw / iptables)"
+echo -e "    3. ${YELLOW}./start.sh${NC}     ← Launch the stack"
+echo -e "    4. Open ${CYAN}http://$(hostname -I | awk '{print $1}'):8080${NC} in your browser"
 echo ""
