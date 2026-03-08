@@ -74,21 +74,35 @@ if [[ $RCLONE_EXIT -eq 0 ]]; then
 
     # Remove torrent from qBittorrent via API (login required)
     if [[ -n "$TORRENT_HASH" ]]; then
-        QBT_PASS="${QBT_WEBUI_PASS:-adminadmin}"
+        # Read password from .env file directly — autorun subprocess may not inherit env vars
+        QBT_PASS="${QBT_WEBUI_PASS:-}"
+        if [[ -z "$QBT_PASS" ]]; then
+            QBT_PASS=$(cat /config/.qbt_pass 2>/dev/null | tr -d '\r\n')
+        fi
+        if [[ -z "$QBT_PASS" ]]; then
+            QBT_PASS=$(grep -m1 '^QBT_WEBUI_PASS=' /scripts/.env 2>/dev/null | cut -d= -f2- | tr -d '\r')
+        fi
+        QBT_PASS="${QBT_PASS:-adminadmin}"
+
         QBT_COOKIE=$(mktemp)
         LOGIN=$(curl -sf --max-time 10 \
             -c "$QBT_COOKIE" \
             --data "username=admin&password=${QBT_PASS}" \
             "${QBT_URL}/api/v2/auth/login" 2>&1)
+        log "qBittorrent login: $LOGIN"
         if [[ "$LOGIN" == "Ok." ]]; then
-            curl -sf --max-time 10 \
+            DELETE_RESP=$(curl -s --max-time 10 \
                 -b "$QBT_COOKIE" \
                 --data "hashes=${TORRENT_HASH}&deleteFiles=false" \
-                "${QBT_URL}/api/v2/torrents/delete" &>/dev/null \
-                && log "Torrent removed from qBittorrent: $TORRENT_HASH" \
-                || log "WARN: Delete call failed (non-fatal)."
+                "${QBT_URL}/api/v2/torrents/delete" 2>&1)
+            DELETE_EXIT=$?
+            if [[ $DELETE_EXIT -eq 0 ]]; then
+                log "Torrent removed from qBittorrent: $TORRENT_HASH"
+            else
+                log "WARN: Delete call failed (exit $DELETE_EXIT): $DELETE_RESP"
+            fi
         else
-            log "WARN: qBittorrent login failed — torrent not removed (non-fatal)."
+            log "WARN: qBittorrent login failed ('$LOGIN') — torrent not removed."
         fi
         rm -f "$QBT_COOKIE"
     fi

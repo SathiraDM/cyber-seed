@@ -65,6 +65,13 @@ if ! grep -q 'Accepted=true' "$CONF_FILE"; then
 fi
 
 chmod 600 "$CONF_FILE"
+
+# Write password to a file so on-complete.sh can read it even when env vars aren't inherited
+if [[ -n "${QBT_WEBUI_PASS:-}" ]]; then
+    echo -n "$QBT_WEBUI_PASS" > /config/.qbt_pass
+    chmod 600 /config/.qbt_pass
+fi
+
 echo "[init-qbt] Base config written. Spawning API configurator in background..."
 
 # ── Write the API configurator to a file (avoids quoting issues) ──────
