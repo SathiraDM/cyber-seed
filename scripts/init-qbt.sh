@@ -68,8 +68,12 @@ chmod 600 "$CONF_FILE"
 
 # Write password to a file so on-complete.sh can read it even when env vars aren't inherited
 if [[ -n "${QBT_WEBUI_PASS:-}" ]]; then
-    echo -n "$QBT_WEBUI_PASS" > /config/.qbt_pass
-    chmod 600 /config/.qbt_pass
+    echo -n "$QBT_WEBUI_PASS" > /config/.qbt_pass \
+        && chmod 600 /config/.qbt_pass \
+        && echo "[init-qbt] Password file written to /config/.qbt_pass" \
+        || echo "[init-qbt] WARNING: Failed to write /config/.qbt_pass"
+else
+    echo "[init-qbt] WARNING: QBT_WEBUI_PASS is empty — .qbt_pass NOT written"
 fi
 
 echo "[init-qbt] Base config written. Spawning API configurator in background..."

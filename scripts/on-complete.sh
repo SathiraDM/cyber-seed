@@ -74,15 +74,11 @@ if [[ $RCLONE_EXIT -eq 0 ]]; then
 
     # Remove torrent from qBittorrent via API (login required)
     if [[ -n "$TORRENT_HASH" ]]; then
-        # Read password from .env file directly — autorun subprocess may not inherit env vars
+        # Try multiple sources for the password
         QBT_PASS="${QBT_WEBUI_PASS:-}"
-        if [[ -z "$QBT_PASS" ]]; then
-            QBT_PASS=$(cat /config/.qbt_pass 2>/dev/null | tr -d '\r\n')
-        fi
-        if [[ -z "$QBT_PASS" ]]; then
-            QBT_PASS=$(grep -m1 '^QBT_WEBUI_PASS=' /scripts/.env 2>/dev/null | cut -d= -f2- | tr -d '\r')
-        fi
+        [[ -z "$QBT_PASS" ]] && QBT_PASS=$(cat /config/.qbt_pass 2>/dev/null | tr -d '\r\n')
         QBT_PASS="${QBT_PASS:-adminadmin}"
+        log "qBittorrent API: logging in (pass length: ${#QBT_PASS})"
 
         QBT_COOKIE=$(mktemp)
         LOGIN=$(curl -sf --max-time 10 \
