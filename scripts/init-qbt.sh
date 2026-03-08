@@ -67,41 +67,46 @@ fi
 chmod 600 "$CONF_FILE"
 echo "[init-qbt] Base config written. Spawning API configurator in background..."
 
-# ── Background: wait for API, then set AutoRun via setPreferences ─────
-# Uses setsid to create a new process session so s6-overlay doesn't
-# kill this background job when the init script's process group is reaped.
+# ── Write the API configurator to a file (avoids quoting hell in setsid) ──
+cat > /tmp/configure-autorun.sh << 'APIEOF'
+#!/bin/bash
+QBT_URL="http://localhost:8080"
 LOG=/config/init-qbt-api.log
-setsid bash -c '
-    QBT_URL="http://localhost:8080"
-    AUTORUN_CMD="/bin/bash /scripts/on-complete.sh \"%N\" \"%F\" \"%D\" \"%I\""
-    LOG=/config/init-qbt-api.log
+CMD='/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
 
-    echo "[init-qbt-api] Waiting for qBittorrent API at ${QBT_URL} ..."
+echo "[init-qbt-api] Started. Waiting for qBittorrent API..." >> "$LOG"
 
-    for i in $(seq 1 60); do
-        if curl -sf --max-time 3 "${QBT_URL}/api/v2/app/version" >/dev/null 2>&1; then
-            echo "[init-qbt-api] API is up (attempt $i)."
-            break
-        fi
-        sleep 3
-    done
-
-    # Set AutoRun preferences via API (127.0.0.1 is whitelisted — no auth needed)
-    RESPONSE=$(curl -sf --max-time 10 \
-        -X POST "${QBT_URL}/api/v2/app/setPreferences" \
-        --data-urlencode "json={\"autorun_on_torrent_finish_enabled\":true,\"autorun_on_torrent_finish_program\":\"${AUTORUN_CMD}\"}" \
-        2>&1)
-    EXIT=$?
-
-    if [[ $EXIT -eq 0 ]]; then
-        echo "[init-qbt-api] AutoRun configured via API: ${AUTORUN_CMD}"
-    else
-        echo "[init-qbt-api] ERROR: setPreferences failed (exit $EXIT): $RESPONSE"
+for i in $(seq 1 60); do
+    if curl -sf --max-time 3 "${QBT_URL}/api/v2/app/version" >/dev/null 2>&1; then
+        echo "[init-qbt-api] API up after ${i} attempts." >> "$LOG"
+        break
     fi
+    sleep 3
+done
 
-    # Verify it took effect
-    PREFS=$(curl -sf --max-time 5 "${QBT_URL}/api/v2/app/preferences" 2>/dev/null)
-    echo "[init-qbt-api] Verify: $(echo "$PREFS" | grep -o '"autorun_on_torrent_finish_program":"[^"]*"')"
-' >>"$LOG" 2>&1 &
+# Encode the JSON payload safely
+JSON=$(printf '{"autorun_on_torrent_finish_enabled":true,"autorun_on_torrent_finish_program":"%s"}' "$CMD")
 
-echo "[init-qbt] init-qbt.sh complete. API configurator detached (setsid PID $!)."
+RESPONSE=$(curl -sf --max-time 10 \
+    -X POST "${QBT_URL}/api/v2/app/setPreferences" \
+    --data-urlencode "json=${JSON}" 2>&1)
+EXIT=$?
+
+if [[ $EXIT -eq 0 ]]; then
+    echo "[init-qbt-api] SUCCESS: AutoRun set to: $CMD" >> "$LOG"
+else
+    echo "[init-qbt-api] ERROR (exit $EXIT): $RESPONSE" >> "$LOG"
+fi
+
+# Verify
+PREFS=$(curl -sf --max-time 5 "${QBT_URL}/api/v2/app/preferences" 2>/dev/null || true)
+PROG=$(echo "$PREFS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('autorun_on_torrent_finish_program','NOT SET'))" 2>/dev/null || echo "parse error")
+echo "[init-qbt-api] Verified program: $PROG" >> "$LOG"
+APIEOF
+
+chmod +x /tmp/configure-autorun.sh
+
+# setsid detaches from s6-overlay's process group so it isn't killed on exit
+setsid /tmp/configure-autorun.sh &
+
+echo "[init-qbt] init-qbt.sh complete. API configurator detached."
