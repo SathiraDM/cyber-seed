@@ -13,14 +13,6 @@ echo -e "${CYAN}[cyber-seed]${NC} Starting stack ..."
 [[ ! -f ".env" ]] && echo -e "${YELLOW}[WARN]${NC} .env not found. Run ./setup.sh first." && exit 1
 [[ ! -f "config/rclone/rclone.conf" ]] && echo -e "${YELLOW}[WARN]${NC} rclone.conf not found. Run ./setup.sh first." && exit 1
 
-# Pre-generate Glances password hash file (avoids interactive TTY prompt)
-MONITOR_PASS=$(grep '^MONITOR_PASS=' .env | cut -d= -f2)
-if [[ -n "$MONITOR_PASS" ]]; then
-    mkdir -p config/glances
-    echo -n "$MONITOR_PASS" | sha256sum | cut -d' ' -f1 > config/glances/glances.pwd
-    chmod 600 config/glances/glances.pwd
-fi
-
 # Build the custom image (only rebuilds if Dockerfile changed)
 docker compose build --quiet
 
