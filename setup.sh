@@ -79,6 +79,13 @@ success "Target path: $REMOTE_PATH"
 # ─────────────────────────────────────────────────────────────────────
 echo ""
 prompt "Step 4 — OneDrive authentication via rclone"
+
+RCLONE_CONF_HOST="$(pwd)/config/rclone/rclone.conf"
+
+if [[ -f "$RCLONE_CONF_HOST" ]]; then
+    success "Existing rclone.conf detected — skipping auth step."
+    echo ""
+else
 echo ""
 echo "  Does this server have a web browser available?"
 echo "  1) Yes — I can open a browser on THIS machine (local/dev)"
@@ -88,9 +95,6 @@ read -rp "Your choice [1/2]: " HEADLESS_CHOICE
 HEADLESS_CHOICE="${HEADLESS_CHOICE:-2}"
 
 echo ""
-
-# Build rclone config inside a temporary container (no host rclone needed)
-RCLONE_CONF_HOST="$(pwd)/config/rclone/rclone.conf"
 
 if [[ "$HEADLESS_CHOICE" == "2" ]]; then
     # ── Headless: full rclone config on another machine ───────────────
@@ -152,6 +156,8 @@ else
     chmod 600 "$RCLONE_CONF_HOST"
     success "rclone.conf written."
 fi
+
+fi  # end: existing rclone.conf check
 
 # ─────────────────────────────────────────────────────────────────────
 #  STEP 5 — Verify rclone connection
