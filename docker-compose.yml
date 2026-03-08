@@ -26,8 +26,8 @@ services:
       - ./config/rclone:/config/rclone
       # Downloads: incomplete + completed folders
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
-      # Completion script (read-only mount)
-      - ./scripts/on-complete.sh:/scripts/on-complete.sh:ro
+      # Scripts directory (directory mount avoids git inode-replacement issues)
+      - ./scripts:/scripts:ro
       # Custom init script to inject qBittorrent AutoRun settings
       - ./scripts/init-qbt.sh:/custom-cont-init.d/99-init-qbt.sh:ro
       # Upload logs
