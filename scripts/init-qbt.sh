@@ -95,7 +95,7 @@ LOGIN=$(curl -sf --max-time 10 \
 echo "[init-qbt-api] Login response: $LOGIN" >> "$LOG"
 
 # Set AutoRun preferences
-JSON="{\"autorun_on_torrent_finish_enabled\":true,\"autorun_on_torrent_finish_program\":\"${CMD}\"}"
+    JSON="{\"autorun_enabled\":true,\"autorun_program\":\"${CMD}\"}"
 RESPONSE=$(curl -sf --max-time 10 \
     -b "$COOKIE_JAR" \
     -X POST "${QBT_URL}/api/v2/app/setPreferences" \
@@ -110,12 +110,15 @@ fi
 
 # Verify
 PROG=$(curl -sf --max-time 5 -b "$COOKIE_JAR" "${QBT_URL}/api/v2/app/preferences" 2>/dev/null \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('autorun_on_torrent_finish_program','NOT SET'))" 2>/dev/null || echo "parse error")
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('autorun_program','NOT SET'))" 2>/dev/null || echo "parse error")
 echo "[init-qbt-api] Verified program: $PROG" >> "$LOG"
 rm -f "$COOKIE_JAR"
 APIEOF
 
 chmod +x /tmp/configure-autorun.sh
+
+# Export password so setsid child inherits it
+export QBT_WEBUI_PASS
 
 # setsid detaches from s6-overlay's process group so it isn't killed on exit
 setsid /tmp/configure-autorun.sh &
