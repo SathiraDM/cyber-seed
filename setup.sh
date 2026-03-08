@@ -190,6 +190,42 @@ read -rp "qBittorrent Web UI port [8080]: " WEBUI_PORT
 WEBUI_PORT="${WEBUI_PORT:-8080}"
 read -rp "Torrent traffic port [6881]: " TORRENT_PORT
 TORRENT_PORT="${TORRENT_PORT:-6881}"
+read -rp "Glances monitor port [61208]: " MONITOR_PORT
+MONITOR_PORT="${MONITOR_PORT:-61208}"
+
+# ─────────────────────────────────────────────────────────────────────
+#  STEP 6 — Credentials  (username is always: admin)
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+prompt "Step 6 — Set passwords  (username for both services will be: admin)"
+echo ""
+
+# ── qBittorrent password ──────────────────────────────────────────────
+prompt "  qBittorrent Web UI password:"
+while true; do
+    read -rsp "    Enter password: " QBT_WEBUI_PASS; echo ""
+    [[ -z "$QBT_WEBUI_PASS" ]] && warn "    Password cannot be empty. Try again." && continue
+    read -rsp "    Confirm password: " QBT_WEBUI_PASS2; echo ""
+    [[ "$QBT_WEBUI_PASS" == "$QBT_WEBUI_PASS2" ]] && break
+    warn "    Passwords do not match. Try again."
+done
+success "qBittorrent password set."
+
+echo ""
+
+# ── Glances password ──────────────────────────────────────────────────
+prompt "  Glances monitor password:"
+while true; do
+    read -rsp "    Enter password: " MONITOR_PASS; echo ""
+    [[ -z "$MONITOR_PASS" ]] && warn "    Password cannot be empty. Try again." && continue
+    read -rsp "    Confirm password: " MONITOR_PASS2; echo ""
+    [[ "$MONITOR_PASS" == "$MONITOR_PASS2" ]] && break
+    warn "    Passwords do not match. Try again."
+done
+success "Glances password set."
+
+# Username is always admin — no need to prompt
+MONITOR_USER="admin"
 
 # ─────────────────────────────────────────────────────────────────────
 #  STEP 8 — Write .env
@@ -201,6 +237,10 @@ PGID=$PGID
 TZ=$(cat /etc/timezone 2>/dev/null || echo UTC)
 WEBUI_PORT=$WEBUI_PORT
 TORRENT_PORT=$TORRENT_PORT
+MONITOR_PORT=$MONITOR_PORT
+MONITOR_USER=admin
+MONITOR_PASS=$MONITOR_PASS
+QBT_WEBUI_PASS=$QBT_WEBUI_PASS
 DOWNLOADS_PATH=./downloads
 ONEDRIVE_REMOTE=$REMOTE_NAME
 ONEDRIVE_PATH=$REMOTE_PATH
@@ -221,11 +261,11 @@ echo "  What was configured:"
 echo -e "    Remote  : ${CYAN}${REMOTE_NAME}${NC}"
 echo -e "    Target  : ${CYAN}${REMOTE_PATH}${NC}"
 echo -e "    Web UI  : ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):${WEBUI_PORT}${NC}"
+echo -e "    Monitor : ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):${MONITOR_PORT}${NC}"
 echo ""
 echo "  Next:"
 echo -e "    ${YELLOW}./start.sh${NC}   ← Launch the stack"
 echo ""
-echo "  qBittorrent default credentials:"
-echo -e "    Username : ${CYAN}admin${NC}"
-echo -e "    Password : ${CYAN}adminadmin${NC}  ← CHANGE THIS in the Web UI!"
+echo "  qBittorrent  →  admin / [password you set]"
+echo "  Glances      →  admin / [password you set]"
 echo ""

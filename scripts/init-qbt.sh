@@ -71,5 +71,26 @@ inject_setting "Preferences" "Downloads\\TempPathEnabled"  "true"
 # ── Web UI: accept connections from any IP ────────────────────────────
 inject_setting "Preferences" "WebUI\\Address" "*"
 
+# ── Web UI: set username + hashed password from env ───────────────────
+if [[ -n "${QBT_WEBUI_PASS:-}" ]]; then
+    echo "[init-qbt] Setting Web UI password ..."
+
+    # qBittorrent 4.4+ uses PBKDF2-SHA1: @ByteArray(b64_salt:b64_hash)
+    # Pass password via env var to avoid shell escaping issues with special chars
+    HASHED=$(QBT_WEBUI_PASS="${QBT_WEBUI_PASS}" python3 - <<'PYEOF'
+import hashlib, os, base64
+password = os.environ['QBT_WEBUI_PASS'].encode('utf-8')
+salt = os.urandom(16)
+dk = hashlib.pbkdf2_hmac('sha1', password, salt, 100000, dklen=32)
+print('@ByteArray(' + base64.b64encode(salt).decode() + ':' + base64.b64encode(dk).decode() + ')')
+PYEOF
+)
+    inject_setting "Preferences" "WebUI\\Username" "admin"
+    inject_setting "Preferences" "WebUI\\Password_PBKDF2" "${HASHED}"
+    echo "[init-qbt] Web UI credentials configured (admin / [hidden])."
+else
+    echo "[init-qbt] QBT_WEBUI_PASS not set — keeping default credentials."
+fi
+
 echo "[init-qbt] qBittorrent config ready."
 chmod 600 "$CONF_FILE"

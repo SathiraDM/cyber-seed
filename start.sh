@@ -23,14 +23,16 @@ docker compose up -d
 sleep 2
 docker compose ps
 
-# Get Web UI port from .env
+# Get ports from .env
 WEBUI_PORT=$(grep '^WEBUI_PORT=' .env | cut -d= -f2)
+MONITOR_PORT=$(grep '^MONITOR_PORT=' .env | cut -d= -f2)
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 echo ""
 echo -e "${GREEN}Stack is up!${NC}"
-echo -e "  Web UI  → ${CYAN}http://${HOST_IP}:${WEBUI_PORT:-8080}${NC}"
-echo -e "  Logs    → ${CYAN}./logs/upload.log${NC}  (tailed with: ${YELLOW}./logs.sh${NC})"
+echo -e "  qBittorrent → ${CYAN}http://${HOST_IP}:${WEBUI_PORT:-8080}${NC}"
+echo -e "  Disk/System → ${CYAN}http://${HOST_IP}:${MONITOR_PORT:-61208}${NC}  (Glances)"
+echo -e "  Logs        → ${CYAN}./logs/upload.log${NC}  (tailed with: ${YELLOW}./logs.sh${NC})"
 echo ""
 echo -e "  Default login: ${YELLOW}admin / adminadmin${NC}  ← change immediately!"
 echo ""
