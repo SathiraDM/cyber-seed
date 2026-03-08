@@ -9,7 +9,7 @@
 CONF_DIR="/config/qBittorrent"
 CONF_FILE="$CONF_DIR/qBittorrent.conf"
 SCRIPT="/scripts/on-complete.sh"
-AUTORUN_CMD="$SCRIPT \"%N\" \"%F\" \"%D\""
+AUTORUN_CMD="/bin/bash $SCRIPT \"%N\" \"%F\" \"%D\""
 
 # Wait for linuxserver init to create the config directory
 for i in $(seq 1 30); do
@@ -57,11 +57,30 @@ inject_setting() {
 
 # qBittorrent 4.x style
 inject_setting "AutoRun" "enabled" "true"
-inject_setting "AutoRun" "program" "$AUTORUN_CMD"
 
-# qBittorrent 5.x style (both set, qbt will use whichever version it understands)
-inject_setting "AutoRun" "OnTorrentFinished\\Command" "$AUTORUN_CMD"
-inject_setting "AutoRun" "OnTorrentFinished\\Enabled" "true"
+# Write AutoRun command via Python to avoid sed/INI quote escaping issues
+CONF_FILE="$CONF_FILE" python3 - <<PYEOF
+import configparser, os
+
+conf_file = os.environ['CONF_FILE']
+cmd = '/bin/bash /scripts/on-complete.sh "%N" "%F" "%D"'
+
+config = configparser.RawConfigParser()
+config.optionxform = str  # preserve case
+config.read(conf_file)
+
+if not config.has_section('AutoRun'):
+    config.add_section('AutoRun')
+config.set('AutoRun', 'enabled', 'true')
+config.set('AutoRun', 'program', cmd)
+config.set('AutoRun', r'OnTorrentFinished\Command', cmd)
+config.set('AutoRun', r'OnTorrentFinished\Enabled', 'true')
+
+with open(conf_file, 'w') as f:
+    config.write(f, space_around_delimiters=False)
+
+print('[init-qbt] AutoRun command written.')
+PYEOF
 
 # ── Download paths ────────────────────────────────────────────────────
 inject_setting "Preferences" "Downloads\\SavePath"         "/downloads/completed/"
