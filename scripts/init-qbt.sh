@@ -67,27 +67,37 @@ fi
 chmod 600 "$CONF_FILE"
 echo "[init-qbt] Base config written. Spawning API configurator in background..."
 
-# ── Write the API configurator to a file (avoids quoting hell in setsid) ──
+# ── Write the API configurator to a file (avoids quoting issues) ──────
 cat > /tmp/configure-autorun.sh << 'APIEOF'
 #!/bin/bash
 QBT_URL="http://localhost:8080"
 LOG=/config/init-qbt-api.log
 CMD='/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
+PASS="${QBT_WEBUI_PASS:-adminadmin}"
 
 echo "[init-qbt-api] Started. Waiting for qBittorrent API..." >> "$LOG"
 
 for i in $(seq 1 60); do
-    if curl -sf --max-time 3 "${QBT_URL}/api/v2/app/version" >/dev/null 2>&1; then
-        echo "[init-qbt-api] API up after ${i} attempts." >> "$LOG"
+    STATUS=$(curl -so /dev/null -w "%{http_code}" --max-time 3 "${QBT_URL}/api/v2/app/version" 2>/dev/null)
+    if [[ "$STATUS" == "200" || "$STATUS" == "403" ]]; then
+        echo "[init-qbt-api] API up (HTTP $STATUS) after ${i} attempts." >> "$LOG"
         break
     fi
     sleep 3
 done
 
-# Encode the JSON payload safely
-JSON=$(printf '{"autorun_on_torrent_finish_enabled":true,"autorun_on_torrent_finish_program":"%s"}' "$CMD")
+# Login to get a session cookie
+COOKIE_JAR=/tmp/qbt-cookies.txt
+LOGIN=$(curl -sf --max-time 10 \
+    -c "$COOKIE_JAR" \
+    --data "username=admin&password=${PASS}" \
+    "${QBT_URL}/api/v2/auth/login" 2>&1)
+echo "[init-qbt-api] Login response: $LOGIN" >> "$LOG"
 
+# Set AutoRun preferences
+JSON="{\"autorun_on_torrent_finish_enabled\":true,\"autorun_on_torrent_finish_program\":\"${CMD}\"}"
 RESPONSE=$(curl -sf --max-time 10 \
+    -b "$COOKIE_JAR" \
     -X POST "${QBT_URL}/api/v2/app/setPreferences" \
     --data-urlencode "json=${JSON}" 2>&1)
 EXIT=$?
@@ -99,9 +109,10 @@ else
 fi
 
 # Verify
-PREFS=$(curl -sf --max-time 5 "${QBT_URL}/api/v2/app/preferences" 2>/dev/null || true)
-PROG=$(echo "$PREFS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('autorun_on_torrent_finish_program','NOT SET'))" 2>/dev/null || echo "parse error")
+PROG=$(curl -sf --max-time 5 -b "$COOKIE_JAR" "${QBT_URL}/api/v2/app/preferences" 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('autorun_on_torrent_finish_program','NOT SET'))" 2>/dev/null || echo "parse error")
 echo "[init-qbt-api] Verified program: $PROG" >> "$LOG"
+rm -f "$COOKIE_JAR"
 APIEOF
 
 chmod +x /tmp/configure-autorun.sh
