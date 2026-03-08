@@ -4,7 +4,7 @@ FROM lscr.io/linuxserver/qbittorrent:latest
 
 # Install rclone + bash (Alpine uses sh by default)
 # rclone install script handles arch detection automatically
-RUN apk add --no-cache curl bash unzip && \
+RUN apk add --no-cache curl bash unzip python3 && \
     curl https://rclone.org/install.sh | bash && \
     rm -rf /var/cache/apk/*
 
