@@ -55,31 +55,36 @@ inject_setting() {
     fi
 }
 
-# qBittorrent 4.x style
-inject_setting "AutoRun" "enabled" "true"
-
-# Write AutoRun command via Python to avoid sed/INI quote escaping issues
-CONF_FILE="$CONF_FILE" python3 - <<PYEOF
-import configparser, os
+# Write AutoRun settings directly (plain regex, no configparser reformatting)
+CONF_FILE="$CONF_FILE" python3 - <<'PYEOF'
+import re, os
 
 conf_file = os.environ['CONF_FILE']
-cmd = '/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
+cmd = r'/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
 
-config = configparser.RawConfigParser()
-config.optionxform = str  # preserve case
-config.read(conf_file)
+with open(conf_file, 'r') as f:
+    content = f.read()
 
-if not config.has_section('AutoRun'):
-    config.add_section('AutoRun')
-config.set('AutoRun', 'enabled', 'true')
-config.set('AutoRun', 'program', cmd)
-config.set('AutoRun', r'OnTorrentFinished\Command', cmd)
-config.set('AutoRun', r'OnTorrentFinished\Enabled', 'true')
+def set_key(text, section, key, value):
+    """Set key=value in [section], case-insensitive key match, preserving exact key name."""
+    # Replace existing key (case-insensitive) anywhere in file
+    pattern = re.compile(r'^' + re.escape(key) + r'\s*=.*$', re.MULTILINE | re.IGNORECASE)
+    if pattern.search(text):
+        return pattern.sub(key + '=' + value, text)
+    # Insert after [Section] header (case-insensitive section match)
+    sec_pattern = re.compile(r'(\[' + re.escape(section) + r'\])', re.IGNORECASE)
+    if sec_pattern.search(text):
+        return sec_pattern.sub(r'\1\n' + key + '=' + value, text)
+    # Section doesn't exist — append it
+    return text.rstrip('\n') + '\n\n[' + section + ']\n' + key + '=' + value + '\n'
+
+content = set_key(content, 'AutoRun', 'enabled', 'true')
+content = set_key(content, 'AutoRun', 'Program', cmd)
 
 with open(conf_file, 'w') as f:
-    config.write(f, space_around_delimiters=False)
+    f.write(content)
 
-print('[init-qbt] AutoRun command written.')
+print('[init-qbt] AutoRun written: ' + cmd)
 PYEOF
 
 # ── Download paths ────────────────────────────────────────────────────
