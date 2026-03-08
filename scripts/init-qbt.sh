@@ -55,7 +55,8 @@ inject_setting() {
     fi
 }
 
-# Write AutoRun settings directly (plain regex, no configparser reformatting)
+# Completely rewrite the [AutoRun] section to ensure correct keys for qBittorrent 5.x
+# qBittorrent 5.x uses OnTorrentFinished\Command (not Program= from 4.x)
 CONF_FILE="$CONF_FILE" python3 - <<'PYEOF'
 import re, os
 
@@ -65,26 +66,26 @@ cmd = r'/bin/bash /scripts/on-complete.sh "%N" "%F" "%D" "%I"'
 with open(conf_file, 'r') as f:
     content = f.read()
 
-def set_key(text, section, key, value):
-    """Set key=value in [section], case-insensitive key match, preserving exact key name."""
-    # Replace existing key (case-insensitive) anywhere in file
-    pattern = re.compile(r'^' + re.escape(key) + r'\s*=.*$', re.MULTILINE | re.IGNORECASE)
-    if pattern.search(text):
-        return pattern.sub(key + '=' + value, text)
-    # Insert after [Section] header (case-insensitive section match)
-    sec_pattern = re.compile(r'(\[' + re.escape(section) + r'\])', re.IGNORECASE)
-    if sec_pattern.search(text):
-        return sec_pattern.sub(r'\1\n' + key + '=' + value, text)
-    # Section doesn't exist — append it
-    return text.rstrip('\n') + '\n\n[' + section + ']\n' + key + '=' + value + '\n'
+# Remove the entire [AutoRun] section (everything until the next section or EOF)
+content = re.sub(
+    r'\[AutoRun\][^\[]*',
+    '',
+    content,
+    flags=re.IGNORECASE | re.DOTALL
+)
 
-content = set_key(content, 'AutoRun', 'enabled', 'true')
-content = set_key(content, 'AutoRun', 'Program', cmd)
+# Append a clean [AutoRun] section with correct qBittorrent 5.x keys
+autorun_block = (
+    '\n[AutoRun]\n'
+    'OnTorrentFinished\\Command=' + cmd + '\n'
+    'OnTorrentFinished\\Enabled=true\n'
+)
+content = content.rstrip('\n') + autorun_block
 
 with open(conf_file, 'w') as f:
     f.write(content)
 
-print('[init-qbt] AutoRun written: ' + cmd)
+print('[init-qbt] AutoRun section rewritten: ' + cmd)
 PYEOF
 
 # ── Download paths ────────────────────────────────────────────────────
