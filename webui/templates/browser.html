@@ -35,10 +35,9 @@
 
 <script>
 // Full virtual Chromium browser on port 3456
-// Password-protected via KasmVNC built-in auth (same password as CyberSeed)
+// KasmVNC requires HTTPS — always use https:// regardless of parent protocol
 const host = window.location.hostname;
-const proto = window.location.protocol;
-document.getElementById('browser-frame').src = proto + '//' + host + ':3456/';
+document.getElementById('browser-frame').src = 'https://' + host + ':3456/';
 </script>
 </body>
 </html>
