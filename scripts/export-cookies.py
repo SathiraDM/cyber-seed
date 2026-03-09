@@ -202,6 +202,9 @@ def main():
                 row["value"],
                 key,
             )
+            # Strip any characters outside latin-1 range (>0xFF) —
+            # HTTP cookie headers must be latin-1 encodable
+            value = "".join(c for c in value if ord(c) <= 0xFF)
             f.write(f"{host}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
             exported += 1
 
