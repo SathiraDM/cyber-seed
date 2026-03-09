@@ -25,9 +25,9 @@ download() {
     local log_file="${3:-/dev/stderr}"
     local fmt="${YT_FORMAT:-best}"
 
-    echo "[facebook] Downloading: $url" >> "$log_file"
-    echo "[facebook] Format: $fmt" >> "$log_file"
-    echo "[facebook] Output dir: $output_dir" >> "$log_file"
+    echo "[facebook] Downloading: $url"
+    echo "[facebook] Format: $fmt"
+    echo "[facebook] Output dir: $output_dir"
 
     mkdir -p "$output_dir"
 
@@ -44,13 +44,13 @@ download() {
         --concurrent-fragments 4 \
         --newline \
         --progress \
-        "$url" >> "$log_file" 2>&1
+        "$url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
-        echo "[facebook] Download complete." >> "$log_file"
+        echo "[facebook] Download complete."
     else
-        echo "[facebook] ERROR: yt-dlp exited with code $exit_code" >> "$log_file"
+        echo "[facebook] ERROR: yt-dlp exited with code $exit_code"
     fi
     return $exit_code
 }

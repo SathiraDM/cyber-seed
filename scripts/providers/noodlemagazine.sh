@@ -25,9 +25,9 @@ download() {
     local log_file="${3:-/dev/stderr}"
     local fmt="${YT_FORMAT:-best}"
 
-    echo "[noodlemagazine] Downloading: $url" >> "$log_file"
-    echo "[noodlemagazine] Format: $fmt" >> "$log_file"
-    echo "[noodlemagazine] Output dir: $output_dir" >> "$log_file"
+    echo "[noodlemagazine] Downloading: $url"
+    echo "[noodlemagazine] Format: $fmt"
+    echo "[noodlemagazine] Output dir: $output_dir"
 
     mkdir -p "$output_dir"
 
@@ -52,13 +52,13 @@ download() {
         --concurrent-fragments 4 \
         --newline \
         --progress \
-        "$url" >> "$log_file" 2>&1
+        "$url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
-        echo "[noodlemagazine] Download complete." >> "$log_file"
+        echo "[noodlemagazine] Download complete."
     else
-        echo "[noodlemagazine] ERROR: yt-dlp exited with code $exit_code" >> "$log_file"
+        echo "[noodlemagazine] ERROR: yt-dlp exited with code $exit_code"
     fi
     return $exit_code
 }

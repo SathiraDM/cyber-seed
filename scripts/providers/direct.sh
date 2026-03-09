@@ -25,8 +25,8 @@ download() {
     local output_dir="$2"
     local log_file="${3:-/dev/stderr}"
 
-    echo "[direct] Downloading: $url" >> "$log_file"
-    echo "[direct] Output dir: $output_dir" >> "$log_file"
+    echo "[direct] Downloading: $url"
+    echo "[direct] Output dir: $output_dir"
 
     mkdir -p "$output_dir"
 
@@ -38,7 +38,7 @@ print(urllib.parse.unquote(sys.stdin.read().strip()))
 ")
     [[ -z "$filename" || "$filename" == "/" ]] && filename="download"
 
-    echo "[direct] Filename: $filename" >> "$log_file"
+    echo "[direct] Filename: $filename"
 
     if command -v aria2c >/dev/null 2>&1; then
         aria2c \
@@ -50,25 +50,23 @@ print(urllib.parse.unquote(sys.stdin.read().strip()))
             --max-tries=5 \
             --retry-wait=3 \
             --console-log-level=notice \
-            --summary-interval=30 \
-            --log="$log_file" \
-            --log-level=notice \
-            "$url"
+            --summary-interval=10 \
+            "$url" 2>&1
     else
-        echo "[direct] aria2c not found, falling back to curl" >> "$log_file"
+        echo "[direct] aria2c not found, falling back to curl"
         curl -L \
             --output "$output_dir/$filename" \
             --retry 5 \
             --retry-delay 3 \
             --progress-bar \
-            "$url" >> "$log_file" 2>&1
+            "$url" 2>&1
     fi
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
-        echo "[direct] Download complete: $output_dir/$filename" >> "$log_file"
+        echo "[direct] Download complete: $output_dir/$filename"
     else
-        echo "[direct] ERROR: Download failed with exit code $exit_code" >> "$log_file"
+        echo "[direct] ERROR: Download failed with exit code $exit_code"
     fi
     return $exit_code
 }
