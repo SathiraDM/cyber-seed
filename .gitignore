@@ -23,10 +23,6 @@ downloads/completed/*
 logs/*
 !logs/.gitkeep
 
-# Cookies exports — contain session tokens, never commit
-*_cookies.txt
-config/cookies/*
-!config/cookies/.gitkeep
 
 # macOS
 .DS_Store

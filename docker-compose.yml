@@ -34,8 +34,6 @@ services:
       - ./scripts/init-qbt.sh:/custom-cont-init.d/99-init-qbt.sh:ro
       # Browser download watcher (s6 long-running service)
       - ./scripts/browser-upload-watcher.sh:/custom-services.d/browser-watcher/run:ro
-      # Browser container config (read-only) for cookie export
-      - ./config/browser:/config/browser:ro
       # Upload logs
       - ./logs:/logs
     ports:
@@ -103,7 +101,10 @@ services:
       - qbittorrent
 
   # ── Virtual Browser (Chromium) ──────────────────────────────────────
-  # Full Chromium browser via noVNC (HTTP, no HTTPS required)
+  # Full Chromium browser via noVNC — browse manually & use Video DownloadHelper
+  # to save videos directly to /downloads/browser → auto-uploaded to OneDrive.
+  # First-time setup: in the browser go to chrome://settings/downloads
+  # and set the download location to /downloads/browser
   browser:
     image: jlesage/chromium
     container_name: cyber-seed-browser
@@ -114,8 +115,9 @@ services:
       - USER_ID=${PUID:-1000}
       - GROUP_ID=${PGID:-1000}
       - TZ=${TZ:-UTC}
-      - DISPLAY_WIDTH=1920
-      - DISPLAY_HEIGHT=1080
+      - DISPLAY_WIDTH=1280
+      - DISPLAY_HEIGHT=720
+      - KEEP_APP_RUNNING=1    # restart Chromium if it crashes
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
