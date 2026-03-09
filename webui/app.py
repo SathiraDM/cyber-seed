@@ -8,9 +8,11 @@ Streams live progress via Server-Sent Events.
 import docker
 import functools
 import hashlib
+import io
 import json
 import os
 import re
+import tarfile
 import threading
 import time
 import uuid
@@ -521,12 +523,20 @@ def fh_queue_status(item_id):
 @app.route("/api/faphouse/resolve", methods=["POST"])
 @login_required
 def fh_resolve():
-    """Extension sends resolved CDN URL. Backend downloads it."""
-    data     = request.get_json(force=True) or {}
-    item_id  = data.get("id", "")
-    cdn_url  = data.get("cdn_url", "")
-    title    = data.get("title", "") or "faphouse_video"
-    quality  = data.get("quality", "")
+    """Extension sends resolved CDN URL + metadata. Backend downloads it."""
+    data       = request.get_json(force=True) or {}
+    item_id    = data.get("id", "")
+    cdn_url    = data.get("cdn_url", "")
+    title      = data.get("title", "") or "faphouse_video"
+    quality    = data.get("quality", "")
+    models     = data.get("models", [])
+    studio     = data.get("studio", "")
+    tags       = data.get("tags", [])
+    duration   = data.get("duration", "")
+    views      = data.get("views", "")
+    rating     = data.get("rating", "")
+    is_trailer = data.get("is_trailer", False)
+    source_url = data.get("source_url", "")
 
     if not cdn_url:
         return jsonify({"error": "No cdn_url"}), 400
@@ -536,6 +546,7 @@ def fh_resolve():
     if quality:
         safe_name = f"{safe_name} [{quality}]"
     safe_name += ".mp4"
+    info_name  = safe_name[:-4] + ".info.json"   # same stem, .info.json
 
     # Update queue item
     with _fh_lock:
@@ -566,13 +577,41 @@ def fh_resolve():
         try:
             with open(log_path, "a") as f:
                 f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] Downloading: {safe_name}\n")
+                if is_trailer:
+                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] WARNING: Only trailer URL found — user may not be premium on this video\n")
                 f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] CDN URL: {cdn_url[:80]}...\n")
                 f.flush()
 
             container = docker_client.containers.get(QBT_CONTAINER)
+
+            # Write .info.json into /downloads/faphouse/ before starting download
+            info_payload = {
+                "title":        title,
+                "source_url":   source_url,
+                "models":       models,
+                "studio":       studio,
+                "tags":         tags,
+                "duration":     duration,
+                "views":        views,
+                "rating":       rating,
+                "quality":      quality,
+                "is_trailer":   is_trailer,
+                "cdn_url":      cdn_url,
+                "downloaded_at": datetime.utcnow().isoformat(),
+            }
+            container.exec_run(["mkdir", "-p", "/downloads/faphouse"])
+            info_bytes = json.dumps(info_payload, indent=2, ensure_ascii=False).encode("utf-8")
+            tar_buf = io.BytesIO()
+            with tarfile.open(fileobj=tar_buf, mode="w") as tar:
+                ti = tarfile.TarInfo(name=info_name)
+                ti.size = len(info_bytes)
+                tar.addfile(ti, io.BytesIO(info_bytes))
+            tar_buf.seek(0)
+            container.put_archive("/downloads/faphouse", tar_buf.getvalue())
+
             cmd = [
                 "aria2c",
-                "--dir=/downloads/browser",
+                "--dir=/downloads/faphouse",
                 f"--out={safe_name}",
                 "--max-connection-per-server=16",
                 "--split=16",

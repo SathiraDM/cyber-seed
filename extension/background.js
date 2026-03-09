@@ -103,67 +103,127 @@ async function processItem(item) {
     return;
   }
 
-  // Send resolved CDN URL back to API
+  // Send resolved CDN URL + metadata back to API
   await apiFetch('/api/faphouse/resolve', {
     method: 'POST',
     body: JSON.stringify({
-      id:       item.id,
-      cdn_url:  result.cdnUrl,
-      title:    result.title || '',
-      quality:  result.quality || '',
+      id:         item.id,
+      cdn_url:    result.cdnUrl,
+      title:      result.title     || '',
+      quality:    result.quality   || '',
+      models:     result.models    || [],
+      studio:     result.studio    || '',
+      tags:       result.tags      || [],
+      duration:   result.duration  || '',
+      views:      result.views     || '',
+      rating:     result.rating    || '',
+      is_trailer: result.isTrailer || false,
+      source_url: item.url,
     }),
   });
 
-  console.log('[cyberseed] Resolved:', item.url, '→', result.quality);
+  console.log('[cyberseed] Resolved:', item.url, '→', result.quality, result.isTrailer ? '(TRAILER)' : '(FULL)');
 }
 
 // This function runs IN the tab context (injected via scripting API)
 function extractVideoData() {
   try {
-    const el = document.querySelector('#video-full, [data-el-formats]');
-    if (!el) {
-      return { error: 'No video element found on page' };
+    // ── Page metadata ─────────────────────────────────────────────────
+    const title = (
+      document.querySelector('.video-page__title, h1.video__title, h1.title, h1')
+        ?.textContent?.trim() ||
+      document.title.replace(/\s*[-|]\s*FapHouse.*$/i, '').trim()
+    );
+
+    const modelEls = document.querySelectorAll(
+      '.model-list a, .performers-list a, .video-models a, ' +
+      '.video-info__performer a, [data-el-performers] a, ' +
+      '.models a, .pornstars a, .actresses a, .performer a'
+    );
+    const models = [...new Set([...modelEls].map(e => e.textContent.trim()).filter(Boolean))];
+
+    const studio = (
+      document.querySelector(
+        '.production a, .studio a, .channel a, ' +
+        '.video-info__studio a, [data-el-studio], .label a, .network a'
+      )?.textContent?.trim() || ''
+    );
+
+    const tagEls = document.querySelectorAll(
+      '.video-tags a, .tags a, .tag-list a, [data-el-tags] a, .tags-container a'
+    );
+    const tags = [...new Set([...tagEls].map(e => e.textContent.trim()).filter(Boolean))];
+
+    const duration = document.querySelector(
+      '.video-duration, .duration, time[datetime], .meta-duration'
+    )?.textContent?.trim() || '';
+
+    const views = document.querySelector(
+      '.video-views, .views-count, .meta-views, .view-count'
+    )?.textContent?.trim() || '';
+
+    const rating = document.querySelector(
+      '.video-rating, .rating-value, .meta-rating, .like-count, .score'
+    )?.textContent?.trim() || '';
+
+    const meta = { title, models, studio, tags, duration, views, rating };
+
+    // ── Video URL — attempt 1: data-el-formats ────────────────────────
+    const el = document.querySelector('#video-full, .video-player [data-el-formats], [data-el-formats]');
+    if (el) {
+      const formatsRaw = el.getAttribute('data-el-formats');
+      if (formatsRaw) {
+        const parsed = JSON.parse(formatsRaw);
+        let formatsArr;
+        if (Array.isArray(parsed)) {
+          formatsArr = parsed;
+        } else {
+          formatsArr = Object.entries(parsed).map(([label, val]) => ({
+            label,
+            url: typeof val === 'string' ? val :
+              (val.url || val.src || val.file ||
+               Object.values(val).find(v => typeof v === 'string' && v.startsWith('http'))),
+          }));
+        }
+
+        // Prefer full (non-trailer) URLs; only fall back to trailer if nothing else
+        const fullFormats = formatsArr.filter(f => f.url && !f.url.includes('/trailer/'));
+        const pool = fullFormats.length ? fullFormats : formatsArr;
+
+        const priorities = ['2160', '4k', '1080', '720', '480', '360'];
+        let best = null;
+        for (const p of priorities) {
+          best = pool.find(f => f.label && f.label.toLowerCase().includes(p));
+          if (best) break;
+        }
+        if (!best && pool.length) best = pool[0];
+
+        if (best?.url) {
+          return {
+            cdnUrl:    best.url,
+            quality:   best.label || 'unknown',
+            isTrailer: fullFormats.length === 0,
+            ...meta,
+          };
+        }
+      }
     }
 
-    const formatsRaw = el.getAttribute('data-el-formats');
-    if (!formatsRaw) {
-      return { error: 'No data-el-formats attribute — not premium?' };
+    // ── Video URL — attempt 2: live <video> element src ───────────────
+    const videoTag = document.querySelector('video');
+    if (videoTag) {
+      const src = videoTag.currentSrc || videoTag.src || videoTag.querySelector('source')?.src;
+      if (src && src.startsWith('http') && !src.includes('/trailer/')) {
+        return { cdnUrl: src, quality: 'video-src', isTrailer: false, ...meta };
+      }
+      if (src && src.includes('.m3u8')) {
+        return { cdnUrl: src, quality: 'hls', isTrailer: false, ...meta };
+      }
     }
-
-    const formatsRaw2 = JSON.parse(formatsRaw);
-    // data-el-formats can be an array OR an object keyed by quality label
-    // Normalise to array of {label, url} objects
-    let formatsArr;
-    if (Array.isArray(formatsRaw2)) {
-      formatsArr = formatsRaw2;
-    } else if (formatsRaw2 && typeof formatsRaw2 === 'object') {
-      // e.g. {"1080p": "https://...", "720p": "https://..."} or {"1080p": {url:"...", ...}}
-      formatsArr = Object.entries(formatsRaw2).map(([label, val]) => ({
-        label,
-        url: typeof val === 'string' ? val : (val.url || val.src || val.file || Object.values(val).find(v => typeof v === 'string' && v.startsWith('http'))),
-      }));
-    } else {
-      return { error: 'data-el-formats has unexpected shape: ' + typeof formatsRaw2 };
-    }
-
-    const priorities = ['2160', '4k', '1080', '720', '480', '360'];
-    let best = null;
-    for (const p of priorities) {
-      best = formatsArr.find(f => f.label && f.label.toLowerCase().includes(p));
-      if (best) break;
-    }
-    if (!best && formatsArr.length) best = formatsArr[0];
-
-    if (!best || !best.url) {
-      return { error: 'formats parsed but no valid URL found', debug: JSON.stringify(formatsArr).slice(0, 500) };
-    }
-
-    const title = document.querySelector('h1.video__title')?.textContent?.trim() || document.title;
 
     return {
-      cdnUrl:  best.url,
-      quality: best.label || 'unknown',
-      title:   title,
+      error: 'No video URL found — ensure you are logged in and on a premium video page',
+      debug: [...document.querySelectorAll('[data-el-formats]')].map(e => `${e.id || e.className}`.trim()).join('|').slice(0, 300),
     };
   } catch (e) {
     return { error: `Extract error: ${e.message}` };
