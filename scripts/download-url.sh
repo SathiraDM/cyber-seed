@@ -93,6 +93,10 @@ upload_to_onedrive() {
     rclone copy "$local_path" \
         "${REMOTE}:${REMOTE_PATH}/${name}" \
         --config "$RCLONE_CONF" \
+        --exclude '*.json' \
+        --exclude '*.webp' \
+        --exclude '*.jpg.webp' \
+        --exclude '*.png.webp' \
         --transfers=4 \
         --checkers=8 \
         --retries=3 \
@@ -117,15 +121,36 @@ process_url() {
     if [[ -z "$output_name" ]]; then
         output_name=$(echo "$url" | python3 -c "
 import sys, urllib.parse, re
+
+# Generic path segments that carry no useful name info
+GENERIC = {'watch','video','videos','reel','reels','shorts','embed',
+           'v','w','clip','clips','stream','live','post','photo',
+           'status','p','t','e'}
+
 u = sys.stdin.read().strip()
-# Try to get a clean name from the URL path
-path = urllib.parse.urlparse(u).path.rstrip('/')
-name = path.split('/')[-1] if path else 'download'
-name = urllib.parse.unquote(name)
-# Strip common extension for folder name
-name = re.sub(r'\.[a-zA-Z0-9]{1,5}$', '', name) if '.' in name else name
-# Sanitize
-name = re.sub(r'[^\w\s\-\.]', '_', name).strip('_').strip()
+parsed = urllib.parse.urlparse(u)
+qs     = urllib.parse.parse_qs(parsed.query)
+
+# Try path last segment first
+path = parsed.path.rstrip('/')
+seg  = path.split('/')[-1] if path else ''
+seg  = urllib.parse.unquote(seg)
+seg  = re.sub(r'\.[a-zA-Z0-9]{1,5}$', '', seg)  # strip extension
+
+if seg.lower() in GENERIC or len(seg) <= 2:
+    # Fall back: look for common video-id query params
+    for param in ('v', 'id', 'video_id', 'vid', 'clip_id'):
+        val = qs.get(param, [None])[0]
+        if val:
+            seg = val
+            break
+    else:
+        # Last resort: use sanitised hostname + first meaningful path part
+        host  = parsed.hostname or 'download'
+        parts = [p for p in path.split('/') if p and p.lower() not in GENERIC]
+        seg   = (parts[0] if parts else host)[:40]
+
+name = re.sub(r'[^\w\s\-\.]', '_', seg).strip('_').strip()
 print(name[:100] or 'download')
 ")
     fi
@@ -169,13 +194,15 @@ print(name[:100] or 'download')
 
     if [[ $up_exit -eq 0 ]]; then
         log "UPLOAD SUCCESS: $output_name → ${REMOTE}:${REMOTE_PATH}/${output_name}"
-        log "Removing local: $output_dir"
-        rm -rf "$output_dir"
-        log "Done."
     else
-        log "UPLOAD FAILED: $output_name (rclone exit $up_exit) — files kept locally"
-        return $up_exit
+        log "UPLOAD FAILED: $output_name (rclone exit $up_exit)"
     fi
+
+    log "Removing local: $output_dir"
+    rm -rf "$output_dir"
+    log "Done."
+
+    return $up_exit
 
     sep
 }
