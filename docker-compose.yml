@@ -34,6 +34,8 @@ services:
       - ./scripts/init-qbt.sh:/custom-cont-init.d/99-init-qbt.sh:ro
       # Browser download watcher (s6 long-running service)
       - ./scripts/browser-upload-watcher.sh:/custom-services.d/browser-watcher/run:ro
+      # Browser container config (read-only) for cookie export
+      - ./config/browser:/config/browser:ro
       # Upload logs
       - ./logs:/logs
     ports:

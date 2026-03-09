@@ -21,6 +21,22 @@
     .info-card p { font-size: .75rem; color: #8b949e; line-height: 1.6; margin: .3rem 0; }
     .info-card .highlight { color: #ffc107; }
     .info-card code { background: #21262d; padding: .15rem .4rem; border-radius: 3px; font-size: .72rem; color: #c9d1d9; }
+    .section-title { font-size: .7rem; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; max-width: 500px; width: 100%; padding-bottom: .4rem; border-bottom: 1px solid #21262d; }
+    .cookie-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.2rem 1.5rem; max-width: 500px; width: 100%; display: flex; flex-direction: column; gap: .8rem; }
+    .cookie-card h3 { font-size: .85rem; color: #0dcaf0; margin: 0; }
+    .cookie-card p { font-size: .75rem; color: #8b949e; line-height: 1.6; margin: 0; }
+    .cookie-card .steps { font-size: .74rem; color: #8b949e; padding-left: 1.2rem; line-height: 1.9; }
+    .cookie-card .steps li span { color: #c9d1d9; }
+    .export-row { display: flex; gap: .6rem; align-items: center; }
+    .export-btn { background: #1f6feb; color: #fff; border: none; padding: .55rem 1.2rem; border-radius: 6px; font-size: .8rem; font-family: inherit; cursor: pointer; transition: background .2s; white-space: nowrap; }
+    .export-btn:hover:not(:disabled) { background: #388bfd; }
+    .export-btn:disabled { opacity: .45; cursor: default; }
+    .domain-input { flex: 1; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: .45rem .7rem; font-size: .8rem; font-family: inherit; }
+    .domain-input:focus { outline: none; border-color: #1f6feb; }
+    .log-box { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: .7rem; font-size: .72rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #8b949e; min-height: 60px; max-height: 180px; overflow-y: auto; display: none; }
+    .log-box.visible { display: block; }
+    .log-box .ok  { color: #3fb950; }
+    .log-box .err { color: #f85149; }
   </style>
 </head>
 <body>
@@ -44,7 +60,25 @@
   <div class="info-card">
     <h3>Virtual Browser (Chromium)</h3>
     <p>Opens a full Chromium browser in a new tab via noVNC (plain HTTP).</p>
-    <p> Downloads in the browser auto-upload to <span class="highlight">OneDrive/WebDownloads</span>.</p>
+    <p>📥 Downloads in the browser auto-upload to <span class="highlight">OneDrive/WebDownloads</span>.</p>
+  </div>
+
+  <p class="section-title">🍪 Authenticated Downloads</p>
+
+  <div class="cookie-card">
+    <h3>Export Site Cookies</h3>
+    <p>Log in to a site in the virtual browser, then export its cookies so CyberSeed can download members-only content.</p>
+    <ol class="steps">
+      <li><span>Open the virtual browser above</span></li>
+      <li><span>Log in to the site normally</span></li>
+      <li><span>Come back here, enter the domain and click Export</span></li>
+      <li><span>Paste the site URL into the downloader as usual</span></li>
+    </ol>
+    <div class="export-row">
+      <input class="domain-input" id="domainInput" type="text" placeholder="e.g. example.com" />
+      <button class="export-btn" id="exportBtn" onclick="exportCookies()">Export Cookies</button>
+    </div>
+    <div class="log-box" id="logBox"></div>
   </div>
 </div>
 
@@ -52,6 +86,53 @@
 function openBrowser() {
   const host = window.location.hostname;
   window.open('http://' + host + ':3456/', '_blank');
+}
+
+async function exportCookies() {
+  const domain = document.getElementById('domainInput').value.trim();
+  if (!domain) { alert('Enter a domain first.'); return; }
+
+  const btn = document.getElementById('exportBtn');
+  const log = document.getElementById('logBox');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  log.className = 'log-box visible';
+  log.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/export-cookies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain })
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      full += chunk;
+      log.innerHTML = full
+        .replace(/(__SUCCESS__.*)/g, '<span class="ok">$1</span>')
+        .replace(/(__FAILED__.*)/g, '<span class="err">$1</span>')
+        .replace(/(ERROR:.*)/g, '<span class="err">$1</span>');
+      log.scrollTop = log.scrollHeight;
+    }
+    if (full.includes('__SUCCESS__')) {
+      btn.textContent = '✓ Done';
+      btn.style.background = '#238636';
+    } else {
+      btn.textContent = '✗ Failed';
+      btn.style.background = '#da3633';
+    }
+  } catch (e) {
+    log.innerHTML += `<span class="err">Network error: ${e}</span>`;
+    btn.textContent = '✗ Error';
+    btn.style.background = '#da3633';
+  } finally {
+    btn.disabled = false;
+  }
 }
 </script>
 </body>

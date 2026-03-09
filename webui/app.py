@@ -146,6 +146,7 @@ _SOURCE_PATTERNS = [
     ("youtube",        r'(youtube\.com|youtu\.be)'),
     ("facebook",       r'(facebook\.com|fb\.watch|fb\.com)'),
     ("noodlemagazine", r'noodlemagazine\.com'),
+    ("faphouse",       r'faphouse\.com'),
     ("vimeo",          r'vimeo\.com'),
     ("twitter",        r'(twitter\.com|x\.com)'),
     ("instagram",      r'instagram\.com'),
@@ -411,6 +412,33 @@ def api_files_delete():
 @login_required
 def browser_page():
     return render_template("browser.html")
+
+
+@app.route("/api/export-cookies", methods=["POST"])
+@login_required
+def api_export_cookies():
+    """Run the cookie export script in the qbt container and stream output."""
+    data = request.get_json(force=True) or {}
+    domain = data.get("domain", "faphouse.com")
+
+    def generate():
+        try:
+            container = docker_client.containers.get(QBT_CONTAINER)
+            cmd = ["python3", "/scripts/export-cookies.py", domain]
+            exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
+            stream = docker_client.api.exec_start(exec_id, stream=True)
+            for chunk in stream:
+                if chunk:
+                    yield chunk.decode("utf-8", errors="replace")
+            exit_code = docker_client.api.exec_inspect(exec_id)["ExitCode"]
+            if exit_code == 0:
+                yield "\n__SUCCESS__"
+            else:
+                yield f"\n__FAILED__ (exit {exit_code})"
+        except Exception as e:
+            yield f"ERROR: {e}\n__FAILED__"
+
+    return Response(stream_with_context(generate()), mimetype="text/plain")
 
 
 if __name__ == "__main__":
