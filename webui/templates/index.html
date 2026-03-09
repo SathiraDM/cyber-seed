@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cyber-seed</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --accent: #0dcaf0; }
+    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+    .navbar-brand { color: var(--accent) !important; font-weight: 700; letter-spacing: 2px; }
+    .card { background: #161b22; border: 1px solid #30363d; }
+    .card-header { background: #21262d; border-bottom: 1px solid #30363d; }
+    .log-box {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      height: 320px; overflow-y: auto; padding: 10px;
+      font-size: .78rem; white-space: pre-wrap; word-break: break-all;
+      color: #8b949e;
+    }
+    .log-box .log-line { line-height: 1.6; }
+    .badge-queued  { background: #6e7681 !important; }
+    .badge-running { background: #d29922 !important; animation: pulse 1.2s infinite; }
+    .badge-done    { background: #238636 !important; }
+    .badge-failed  { background: #da3633 !important; }
+    .badge-cancelled { background: #6e7681 !important; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    .job-row { cursor: pointer; transition: background .15s; }
+    .job-row:hover { background: #21262d; }
+    .job-row.active-row { background: #1c2128; border-left: 3px solid var(--accent); }
+    #url-submit-form textarea:focus, #url-submit-form input:focus { border-color: var(--accent); box-shadow: none; }
+    .spinner-xs { width: 12px; height: 12px; border-width: 2px; }
+    h6.section-label { font-size: .65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #6e7681; }
+    #active-log-header { font-size: .8rem; color: var(--accent); word-break: break-all; }
+    .url-col { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark border-bottom border-secondary mb-4">
+  <div class="container-fluid px-4">
+    <span class="navbar-brand">⬡ cyber-seed</span>
+    <span class="text-secondary" style="font-size:.8rem" id="docker-status">connecting…</span>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+  <div class="row g-4">
+
+    <!-- ── Left: Submit ──────────────────────────── -->
+    <div class="col-lg-4">
+      <div class="card mb-4">
+        <div class="card-header"><h6 class="section-label mb-0">Submit Download</h6></div>
+        <div class="card-body">
+          <form id="url-submit-form">
+            <div class="mb-3">
+              <label class="form-label small text-secondary">URL(s) <span class="text-muted">(one per line)</span></label>
+              <textarea id="input-urls" class="form-control bg-dark text-light border-secondary" rows="5"
+                placeholder="https://youtube.com/watch?v=…&#10;https://example.com/file.zip myname"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-secondary">Default name <span class="text-muted">(optional)</span></label>
+              <input id="input-name" type="text" class="form-control bg-dark text-light border-secondary"
+                placeholder="e.g. my-video">
+            </div>
+            <button type="submit" class="btn btn-info w-100 fw-bold">
+              <span id="submit-spinner" class="spinner-border spinner-xs me-2 d-none" role="status"></span>
+              Dispatch
+            </button>
+          </form>
+          <div id="submit-msg" class="mt-2 small"></div>
+        </div>
+      </div>
+
+      <!-- Stats mini card -->
+      <div class="card">
+        <div class="card-body py-2 px-3">
+          <div class="row text-center g-0" id="stats-row">
+            <div class="col"><div class="fw-bold" id="stat-running">—</div><div class="text-secondary" style="font-size:.7rem">running</div></div>
+            <div class="col"><div class="fw-bold text-success" id="stat-done">—</div><div class="text-secondary" style="font-size:.7rem">done</div></div>
+            <div class="col"><div class="fw-bold text-danger" id="stat-failed">—</div><div class="text-secondary" style="font-size:.7rem">failed</div></div>
+            <div class="col"><div class="fw-bold text-secondary" id="stat-total">—</div><div class="text-secondary" style="font-size:.7rem">total</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Jobs + Log ─────────────────────── -->
+    <div class="col-lg-8">
+      <!-- Job table -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="section-label mb-0">Jobs</h6>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="loadJobs()">↻ refresh</button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0" style="font-size:.8rem">
+              <thead class="text-secondary">
+                <tr>
+                  <th class="ps-3">ID</th>
+                  <th>URL / Name</th>
+                  <th>Status</th>
+                  <th>Started</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="job-tbody">
+                <tr><td colspan="5" class="text-center text-secondary py-4">No jobs yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live log viewer -->
+      <div class="card" id="log-card" style="display:none">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="section-label mb-0 d-inline">Live Log</h6>
+            <span id="active-log-header" class="ms-2"></span>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="closeLog()">✕</button>
+        </div>
+        <div class="card-body p-2">
+          <div class="log-box" id="log-box"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let activeJobId = null;
+let activeEvtSrc = null;
+let refreshTimer = null;
+
+// ─ Submit ────────────────────────────────────────────
+document.getElementById("url-submit-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const urls = document.getElementById("input-urls").value.trim();
+  const name = document.getElementById("input-name").value.trim();
+  if (!urls) return;
+
+  const spinner = document.getElementById("submit-spinner");
+  const msg     = document.getElementById("submit-msg");
+  spinner.classList.remove("d-none");
+  msg.innerHTML = "";
+
+  try {
+    const r = await fetch("/api/submit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ urls, name })
+    });
+    const data = await r.json();
+    if (r.ok) {
+      msg.innerHTML = `<span class="text-info">✓ Submitted ${data.submitted} job(s)</span>`;
+      document.getElementById("input-urls").value = "";
+      document.getElementById("input-name").value = "";
+      loadJobs();
+      if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
+    } else {
+      msg.innerHTML = `<span class="text-danger">✗ ${data.error}</span>`;
+    }
+  } catch(err) {
+    msg.innerHTML = `<span class="text-danger">✗ ${err}</span>`;
+  } finally {
+    spinner.classList.add("d-none");
+  }
+});
+
+// ─ Jobs ──────────────────────────────────────────────
+async function loadJobs() {
+  try {
+    const r = await fetch("/api/jobs");
+    if (!r.ok) return;
+    const jobs = await r.json();
+    renderJobs(jobs);
+    updateStats(jobs);
+    document.getElementById("docker-status").textContent = "● connected";
+    document.getElementById("docker-status").className = "text-success";
+  } catch {
+    document.getElementById("docker-status").textContent = "● error";
+    document.getElementById("docker-status").className = "text-danger";
+  }
+}
+
+function renderJobs(jobs) {
+  const tbody = document.getElementById("job-tbody");
+  if (!jobs.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary py-4">No jobs yet</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => {
+    const label    = j.name || j.url;
+    const badge    = `<span class="badge badge-${j.status}">${j.status}</span>`;
+    const ts       = j.started_at ? j.started_at.replace("T"," ").slice(0,19) : "—";
+    const cancel   = ["queued","running"].includes(j.status)
+      ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="cancelJob('${j.id}',event)">✕</button>`
+      : "";
+    const active   = j.id === activeJobId ? "active-row" : "";
+    return `<tr class="job-row ${active}" onclick="openLog('${j.id}','${escHtml(label)}')">
+      <td class="ps-3 text-secondary">${j.id}</td>
+      <td class="url-col" title="${escHtml(j.url)}">${escHtml(label)}</td>
+      <td>${badge}</td>
+      <td class="text-secondary">${ts}</td>
+      <td>${cancel}</td>
+    </tr>`;
+  }).join("");
+}
+
+function updateStats(jobs) {
+  document.getElementById("stat-running").textContent = jobs.filter(j=>j.status==="running").length;
+  document.getElementById("stat-done").textContent    = jobs.filter(j=>j.status==="done").length;
+  document.getElementById("stat-failed").textContent  = jobs.filter(j=>j.status==="failed").length;
+  document.getElementById("stat-total").textContent   = jobs.length;
+}
+
+// ─ Cancel ────────────────────────────────────────────
+async function cancelJob(id, e) {
+  e.stopPropagation();
+  await fetch(`/api/jobs/${id}/cancel`, {method:"POST"});
+  loadJobs();
+}
+
+// ─ Log viewer ────────────────────────────────────────
+function openLog(jobId, label) {
+  if (activeEvtSrc) { activeEvtSrc.close(); activeEvtSrc = null; }
+  activeJobId = jobId;
+
+  document.getElementById("log-card").style.display = "";
+  document.getElementById("active-log-header").textContent = label;
+  const box = document.getElementById("log-box");
+  box.innerHTML = "";
+
+  const es = new EventSource(`/api/jobs/${jobId}/log`);
+  activeEvtSrc = es;
+
+  es.onmessage = ev => {
+    if (ev.data === "[DONE]") { es.close(); loadJobs(); return; }
+    const line = document.createElement("div");
+    line.className = "log-line";
+    line.textContent = ev.data;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  };
+
+  es.onerror = () => { es.close(); };
+  loadJobs(); // refresh row highlight
+}
+
+function closeLog() {
+  if (activeEvtSrc) { activeEvtSrc.close(); activeEvtSrc = null; }
+  activeJobId = null;
+  document.getElementById("log-card").style.display = "none";
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ─ Auto-refresh every 3 s ────────────────────────────
+loadJobs();
+setInterval(loadJobs, 3000);
+</script>
+</body>
+</html>

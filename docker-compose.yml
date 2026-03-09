@@ -71,3 +71,24 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # ── Web UI (URL dispatcher) ─────────────────────────────────────────
+  # Accepts URL submissions, dispatches to qbt container, streams progress
+  webui:
+    build:
+      context: ./webui
+      dockerfile: Dockerfile
+    container_name: cyber-seed-webui
+    restart: unless-stopped
+    environment:
+      - QBT_CONTAINER=cyber-seed-qbt
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Docker socket to run exec in sibling containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Shared logs directory so job logs are visible
+      - ./logs:/logs
+    ports:
+      - "${DOWNLOADER_PORT:-8888}:8888"
+    depends_on:
+      - qbittorrent
