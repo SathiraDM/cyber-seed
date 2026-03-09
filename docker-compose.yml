@@ -101,25 +101,25 @@ services:
       - qbittorrent
 
   # ── Virtual Browser (Chromium) ──────────────────────────────────────
-  # Full Chromium browser accessible via web, downloads go to /downloads
+  # Full Chromium browser via noVNC (HTTP, no HTTPS required)
   browser:
-    image: lscr.io/linuxserver/chromium:latest
+    image: jlesage/chromium
     container_name: cyber-seed-browser
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined   # required for Chromium sandboxing
     environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - USER_ID=${PUID:-1000}
+      - GROUP_ID=${PGID:-1000}
       - TZ=${TZ:-UTC}
-      - CHROME_CLI=https://www.google.com
-      - CUSTOM_USER=${BROWSER_USER:-admin}
-      - PASSWORD=${QBT_WEBUI_PASS:-password}
-      - NO_HTTPS=true
+      - DISPLAY_WIDTH=1920
+      - DISPLAY_HEIGHT=1080
+      - WEB_AUTHENTICATION=1
+      - WEB_AUTHENTICATION_USERNAME=${BROWSER_USER:-admin}
+      - WEB_AUTHENTICATION_PASSWORD=${QBT_WEBUI_PASS:-password}
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
-      - ./config/browser-policies:/etc/chromium/policies
     ports:
-      - "${BROWSER_PORT:-3456}:3000"
+      - "${BROWSER_PORT:-3456}:5800"
     shm_size: "1gb"
