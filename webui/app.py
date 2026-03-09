@@ -136,13 +136,14 @@ def run_job(job: dict):
 
 # ── Source detection ─────────────────────────────────────────────────
 _SOURCE_PATTERNS = [
-    ("youtube",  r'(youtube\.com|youtu\.be)'),
-    ("facebook", r'(facebook\.com|fb\.watch|fb\.com)'),
-    ("vimeo",    r'vimeo\.com'),
-    ("twitter",  r'(twitter\.com|x\.com)'),
-    ("instagram",r'instagram\.com'),
-    ("tiktok",   r'tiktok\.com'),
-    ("twitch",   r'twitch\.tv'),
+    ("youtube",        r'(youtube\.com|youtu\.be)'),
+    ("facebook",       r'(facebook\.com|fb\.watch|fb\.com)'),
+    ("noodlemagazine", r'noodlemagazine\.com'),
+    ("vimeo",          r'vimeo\.com'),
+    ("twitter",        r'(twitter\.com|x\.com)'),
+    ("instagram",      r'instagram\.com'),
+    ("tiktok",         r'tiktok\.com'),
+    ("twitch",         r'twitch\.tv'),
 ]
 
 def detect_source(url: str) -> str:

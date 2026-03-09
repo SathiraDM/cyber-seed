@@ -32,8 +32,9 @@
     .src-twitter  { background: #1d9bf0 !important; color: #fff !important; }
     .src-instagram{ background: #c13584 !important; color: #fff !important; }
     .src-tiktok   { background: #010101 !important; color: #fff !important; border: 1px solid #444 !important; }
-    .src-twitch   { background: #9146ff !important; color: #fff !important; }
-    .src-auto     { background: #21262d !important; color: #8b949e !important; border: 1px solid #30363d !important; }
+    .src-twitch        { background: #9146ff !important; color: #fff !important; }
+    .src-noodlemagazine { background: #c0392b !important; color: #fff !important; }
+    .src-auto           { background: #21262d !important; color: #8b949e !important; border: 1px solid #30363d !important; }
     /* Source pill in form */
     #source-pill { transition: all .2s; }
     #quality-wrap { transition: opacity .2s; }
@@ -89,6 +90,7 @@
                 <option value="instagram">&#9672; Instagram (yt-dlp)</option>
                 <option value="tiktok">&#9834; TikTok (yt-dlp)</option>
                 <option value="twitch">&#9673; Twitch (yt-dlp)</option>
+                <option value="noodlemagazine">&#9679; NoodleMagazine (yt-dlp)</option>
                 <option value="direct">&#11015; Direct link (aria2c)</option>
               </select>
             </div>
@@ -195,7 +197,8 @@ const SOURCE_PATTERNS = [
   { key: "twitter",   re: /twitter\.com|x\.com/i,                  label: "✕ X (Twitter)" },
   { key: "instagram", re: /instagram\.com/i,                        label: "◈ Instagram" },
   { key: "tiktok",    re: /tiktok\.com/i,                          label: "♪ TikTok" },
-  { key: "twitch",    re: /twitch\.tv/i,                           label: "◉ Twitch" },
+  { key: "twitch",        re: /twitch\.tv/i,                          label: "◉ Twitch" },
+  { key: "noodlemagazine", re: /noodlemagazine\.com/i,                 label: "● NoodleMagazine" },
 ];
 
 const SOURCE_LABELS = {
@@ -205,8 +208,9 @@ const SOURCE_LABELS = {
   twitter:   "✕ Twitter/X",
   instagram: "◈ Instagram",
   tiktok:    "♪ TikTok",
-  twitch:    "◉ Twitch",
-  direct:    "⬇ Direct",
+  twitch:         "◉ Twitch",
+  noodlemagazine: "● NoodleMagazine",
+  direct:         "⬇ Direct",
 };
 
 function detectSource(url) {
@@ -217,7 +221,7 @@ function detectSource(url) {
 }
 
 // direct links don't benefit from quality selection
-const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch"]);
+const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch","noodlemagazine"]);
 
 function updateFormForSource(src) {
   const pill  = document.getElementById("source-pill");

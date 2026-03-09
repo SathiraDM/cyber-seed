@@ -48,7 +48,7 @@ usage() {
 # Order: youtube first (most specific), direct last (catch-all)
 PROVIDER_FILES=()
 # Load named providers in priority order
-for p in youtube facebook direct; do
+for p in youtube facebook noodlemagazine direct; do
     f="$PROVIDERS_DIR/${p}.sh"
     [[ -f "$f" ]] && PROVIDER_FILES+=("$f")
 done
