@@ -96,8 +96,8 @@ def get_cookies(domain_filter):
 def build_cookie_header(cookies):
     parts = []
     for k, v in cookies.items():
-        # Strip characters outside latin-1 range (HTTP header constraint)
-        safe_v = "".join(c for c in v if ord(c) <= 0xFF)
+        # Cookie values must be printable ASCII (0x21–0x7E), no control chars or high bytes
+        safe_v = "".join(c for c in v if 0x20 <= ord(c) <= 0x7E and c not in '";,\\')
         if safe_v:
             parts.append(f"{k}={safe_v}")
     return "; ".join(parts)
