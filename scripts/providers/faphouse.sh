@@ -46,6 +46,10 @@ download() {
     echo "[faphouse] Using cookies file: $COOKIES_FILE"
     mkdir -p "$output_dir"
 
+    # Strip URL fragment (#...) — yt-dlp cannot handle non-latin-1 hash values
+    local clean_url="${url%%#*}"
+    echo "[faphouse] Clean URL: $clean_url"
+
     local -a fmt_flags
     case "$fmt" in
         2160p) fmt_flags=(--format 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' --merge-output-format mp4) ;;
@@ -70,7 +74,7 @@ download() {
         --newline \
         --progress \
         --add-header "Referer:https://faphouse.com" \
-        "$url" 2>&1
+        "$clean_url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
