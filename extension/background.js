@@ -130,19 +130,32 @@ function extractVideoData() {
       return { error: 'No data-el-formats attribute — not premium?' };
     }
 
-    const formats = JSON.parse(formatsRaw);
-    // formats is an array of objects like: { "label": "1080p", "url": "https://video-nss.flixcdn.com/..." }
-    // Pick highest quality
-    const priorities = ['2160', '1080', '720', '480', '360'];
+    const formatsRaw2 = JSON.parse(formatsRaw);
+    // data-el-formats can be an array OR an object keyed by quality label
+    // Normalise to array of {label, url} objects
+    let formatsArr;
+    if (Array.isArray(formatsRaw2)) {
+      formatsArr = formatsRaw2;
+    } else if (formatsRaw2 && typeof formatsRaw2 === 'object') {
+      // e.g. {"1080p": "https://...", "720p": "https://..."} or {"1080p": {url:"...", ...}}
+      formatsArr = Object.entries(formatsRaw2).map(([label, val]) => ({
+        label,
+        url: typeof val === 'string' ? val : (val.url || val.src || val.file || Object.values(val).find(v => typeof v === 'string' && v.startsWith('http'))),
+      }));
+    } else {
+      return { error: 'data-el-formats has unexpected shape: ' + typeof formatsRaw2 };
+    }
+
+    const priorities = ['2160', '4k', '1080', '720', '480', '360'];
     let best = null;
     for (const p of priorities) {
-      best = formats.find(f => f.label && f.label.includes(p));
+      best = formatsArr.find(f => f.label && f.label.toLowerCase().includes(p));
       if (best) break;
     }
-    if (!best && formats.length) best = formats[0];
+    if (!best && formatsArr.length) best = formatsArr[0];
 
     if (!best || !best.url) {
-      return { error: 'formats parsed but no valid URL found' };
+      return { error: 'formats parsed but no valid URL found', debug: JSON.stringify(formatsArr).slice(0, 500) };
     }
 
     const title = document.querySelector('h1.video__title')?.textContent?.trim() || document.title;
