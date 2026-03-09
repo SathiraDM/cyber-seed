@@ -45,7 +45,6 @@
     <h3>Virtual Browser (Chromium)</h3>
     <p>Opens a full Chromium browser in a new tab via KasmVNC.</p>
     <p>🔐 <span class="highlight">Login:</span> username <code>admin</code>, same password as CyberSeed</p>
-    <p>⚠️ You'll see a <span class="highlight">self-signed certificate warning</span> on first visit — click <strong>Advanced → Proceed</strong> to continue.</p>
     <p>📥 Downloads in the browser auto-upload to <span class="highlight">OneDrive/WebDownloads</span>.</p>
   </div>
 </div>
@@ -53,7 +52,7 @@
 <script>
 function openBrowser() {
   const host = window.location.hostname;
-  window.open('https://' + host + ':3456/', '_blank');
+  window.open('http://' + host + ':3456/', '_blank');
 }
 </script>
 </body>

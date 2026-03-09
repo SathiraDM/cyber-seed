@@ -115,6 +115,7 @@ services:
       - CHROME_CLI=https://www.google.com
       - CUSTOM_USER=${BROWSER_USER:-admin}
       - PASSWORD=${QBT_WEBUI_PASS:-password}
+      - NO_HTTPS=true
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
