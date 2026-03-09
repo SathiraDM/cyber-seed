@@ -94,7 +94,13 @@ def get_cookies(domain_filter):
 
 
 def build_cookie_header(cookies):
-    return "; ".join(f"{k}={v}" for k, v in cookies.items())
+    parts = []
+    for k, v in cookies.items():
+        # Strip characters outside latin-1 range (HTTP header constraint)
+        safe_v = "".join(c for c in v if ord(c) <= 0xFF)
+        if safe_v:
+            parts.append(f"{k}={safe_v}")
+    return "; ".join(parts)
 
 
 def fetch_page(url, cookie_header):
