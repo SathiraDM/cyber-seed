@@ -2,15 +2,18 @@
 """
 find-video-url.py — Extract the real direct video URL from a faphouse page.
 
-Uses yt-dlp --write-pages to let yt-dlp handle authenticated page fetching
-(with Chromium cookie decryption), then parses data-el-formats / data-el-hls-url
-from the dumped HTML to get the signed video URL.
+Uses yt-dlp --write-pages with a cookies.txt file to fetch the authenticated
+page, then parses data-el-formats / data-el-hls-url from the dumped HTML
+to get the signed video URL.
 
 Prints the direct video URL to stdout.
 
 Usage:
     python3 /scripts/find-video-url.py <page_url> [quality]
     quality: 2160 | 1080 | 720 | 480 | 360 | 240  (default: best available)
+
+Cookies file: /config/cookies/faphouse-cookies.txt (Netscape format)
+Export from your browser using the 'Get cookies.txt LOCALLY' extension.
 """
 import sys
 import re
@@ -21,7 +24,7 @@ import shutil
 import os
 import html as html_mod
 
-BROWSER_PROFILE = "/config/browser/chromium"
+COOKIES_FILE = "/config/cookies/faphouse-cookies.txt"
 PREFERRED_QUALITIES = ["2160", "1080", "720", "480", "360", "240"]
 
 
@@ -29,7 +32,7 @@ def fetch_page_via_ytdlp(page_url: str, tmpdir: str) -> str | None:
     """Run yt-dlp --write-pages --no-download, return path to the .dump file."""
     cmd = [
         "yt-dlp",
-        "--cookies-from-browser", f"chromium:{BROWSER_PROFILE}",
+        "--cookies", COOKIES_FILE,
         "--write-pages",
         "--no-download",
         "--no-playlist",

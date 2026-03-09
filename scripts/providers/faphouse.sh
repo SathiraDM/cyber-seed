@@ -3,20 +3,18 @@
 #  Provider: faphouse
 #  Handles: faphouse.com videos (requires authentication)
 #
-#  Uses yt-dlp --cookies-from-browser which reads directly from the
-#  Chromium profile in the browser container (no manual export needed).
-#  Just log in to the site in the virtual browser first.
-#
-#  Browser profile location (mounted in qbt container):
-#    /config/browser/chromium
+#  Uses a cookies.txt file exported from your local browser.
+#  To refresh: log in at faphouse.com locally, export via the
+#  'Get cookies.txt LOCALLY' extension, then scp to the server and
+#  docker cp into the qbt container at /config/cookies/faphouse-cookies.txt
 #
 #  Interface (called by download-url.sh):
 #    can_handle <url>   → exit 0 if this provider handles the URL
 #    download <url> <output_dir> <log_file>  → download into output_dir
 # ─────────────────────────────────────────────────────────────────────
 
-PROVIDER_NAME="faphouse (yt-dlp + browser cookies)"
-BROWSER_PROFILE="/config/browser/chromium"
+PROVIDER_NAME="faphouse (yt-dlp + cookies.txt)"
+COOKIES_FILE="/config/cookies/faphouse-cookies.txt"
 
 can_handle() {
     local url="$1"
@@ -36,13 +34,14 @@ download() {
     echo "[faphouse] Format: $fmt"
     echo "[faphouse] Output dir: $output_dir"
 
-    if [[ ! -d "$BROWSER_PROFILE" ]]; then
-        echo "[faphouse] ERROR: Browser profile not found at $BROWSER_PROFILE"
-        echo "[faphouse] Make sure the virtual browser has been opened at least once."
+    if [[ ! -f "$COOKIES_FILE" ]]; then
+        echo "[faphouse] ERROR: Cookies file not found at $COOKIES_FILE"
+        echo "[faphouse] Export cookies from faphouse.com using 'Get cookies.txt LOCALLY' extension,"
+        echo "[faphouse] then: docker cp faphouse-cookies.txt cyber-seed-qbt:/config/cookies/faphouse-cookies.txt"
         exit 1
     fi
 
-    echo "[faphouse] Reading cookies from browser profile: $BROWSER_PROFILE"
+    echo "[faphouse] Using cookies from: $COOKIES_FILE"
     mkdir -p "$output_dir"
 
     # Strip URL fragment (#...) — causes encoding issues
@@ -92,7 +91,7 @@ download() {
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
-        --cookies-from-browser "chromium:$BROWSER_PROFILE" \
+        --cookies "$COOKIES_FILE" \
         --trim-filenames 200 \
         --retries 5 \
         --fragment-retries 5 \
