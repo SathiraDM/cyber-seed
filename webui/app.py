@@ -32,6 +32,27 @@ WEBUI_PASS     = os.environ.get("QBT_WEBUI_PASS", "")
 app.secret_key = hashlib.sha256(f"cyber-seed:{WEBUI_PASS}".encode()).hexdigest()
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
+# ── CORS (for Chrome extension) ───────────────────────────────────────
+@app.after_request
+def add_cors(response):
+    origin = request.headers.get("Origin", "")
+    if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Api-Key"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+    return response
+
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        origin = request.headers.get("Origin", "")
+        if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
+            resp = Response("", 204)
+            resp.headers["Access-Control-Allow-Origin"] = origin
+            resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Api-Key"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+            return resp
+
 # ── Auth ──────────────────────────────────────────────────────────────
 def login_required(f):
     @functools.wraps(f)
