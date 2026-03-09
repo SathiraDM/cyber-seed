@@ -34,6 +34,7 @@
     .src-tiktok   { background: #010101 !important; color: #fff !important; border: 1px solid #444 !important; }
     .src-twitch        { background: #9146ff !important; color: #fff !important; }
     .src-noodlemagazine { background: #c0392b !important; color: #fff !important; }
+    .src-faphouse       { background: #8e44ad !important; color: #fff !important; }
     .src-auto           { background: #21262d !important; color: #8b949e !important; border: 1px solid #30363d !important; }
     /* Source pill in form */
     #source-pill { transition: all .2s; }
@@ -93,6 +94,7 @@
                 <option value="tiktok">&#9834; TikTok (yt-dlp)</option>
                 <option value="twitch">&#9673; Twitch (yt-dlp)</option>
                 <option value="noodlemagazine">&#9679; NoodleMagazine (yt-dlp)</option>
+                <option value="faphouse">&#128274; FH (yt-dlp + cookies)</option>
                 <option value="direct">&#11015; Direct link (aria2c)</option>
               </select>
             </div>
@@ -200,7 +202,8 @@ const SOURCE_PATTERNS = [
   { key: "instagram", re: /instagram\.com/i,                        label: "◈ Instagram" },
   { key: "tiktok",    re: /tiktok\.com/i,                          label: "♪ TikTok" },
   { key: "twitch",        re: /twitch\.tv/i,                          label: "◉ Twitch" },
-  { key: "noodlemagazine", re: /noodlemagazine\.com/i,                 label: "● NoodleMagazine" },
+  { key: "noodlemagazine", re: /noodlemagazine\.com/i,                 label: "\u25cf NoodleMagazine" },
+  { key: "faphouse",       re: /faphouse\.com/i,                        label: "\ud83d\udd12 FH" },
 ];
 
 const SOURCE_LABELS = {
@@ -212,7 +215,8 @@ const SOURCE_LABELS = {
   tiktok:    "♪ TikTok",
   twitch:         "◉ Twitch",
   noodlemagazine: "● NoodleMagazine",
-  direct:         "⬇ Direct",
+  faphouse:        "🔐 FH",
+  direct:          "⬇ Direct",
 };
 
 function detectSource(url) {
@@ -223,7 +227,7 @@ function detectSource(url) {
 }
 
 // direct links don't benefit from quality selection
-const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch","noodlemagazine"]);
+const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch","noodlemagazine","faphouse"]);
 
 function updateFormForSource(src) {
   const pill  = document.getElementById("source-pill");
