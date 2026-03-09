@@ -1,22 +1,22 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────
 #  Provider: faphouse
-#  Handles: faphouse.com videos (requires authentication cookies)
+#  Handles: faphouse.com videos (requires authentication)
 #
-#  Uses yt-dlp generic extractor with a Netscape cookies file.
-#  Export cookies first by clicking "Export Cookies" in CyberSeed
-#  after logging in to faphouse.com in the virtual browser.
+#  Uses yt-dlp --cookies-from-browser which reads directly from the
+#  Chromium profile in the browser container (no manual export needed).
+#  Just log in to the site in the virtual browser first.
 #
-#  Cookies file location (in qbt container):
-#    /config/rclone/faphouse-cookies.txt
+#  Browser profile location (mounted in qbt container):
+#    /config/browser/chromium
 #
 #  Interface (called by download-url.sh):
 #    can_handle <url>   → exit 0 if this provider handles the URL
 #    download <url> <output_dir> <log_file>  → download into output_dir
 # ─────────────────────────────────────────────────────────────────────
 
-PROVIDER_NAME="faphouse (yt-dlp + cookies)"
-COOKIES_FILE="/config/rclone/faphouse-cookies.txt"
+PROVIDER_NAME="faphouse (yt-dlp + browser cookies)"
+BROWSER_PROFILE="/config/browser/chromium"
 
 can_handle() {
     local url="$1"
@@ -36,17 +36,16 @@ download() {
     echo "[faphouse] Format: $fmt"
     echo "[faphouse] Output dir: $output_dir"
 
-    if [[ ! -f "$COOKIES_FILE" ]]; then
-        echo "[faphouse] ERROR: Cookies file not found at $COOKIES_FILE"
-        echo "[faphouse] Please log in to faphouse.com in the virtual browser,"
-        echo "[faphouse] then click 'Export Faphouse Cookies' in CyberSeed."
+    if [[ ! -d "$BROWSER_PROFILE" ]]; then
+        echo "[faphouse] ERROR: Browser profile not found at $BROWSER_PROFILE"
+        echo "[faphouse] Make sure the virtual browser has been opened at least once."
         exit 1
     fi
 
-    echo "[faphouse] Using cookies file: $COOKIES_FILE"
+    echo "[faphouse] Reading cookies from browser profile: $BROWSER_PROFILE"
     mkdir -p "$output_dir"
 
-    # Strip URL fragment (#...) — yt-dlp cannot handle non-latin-1 hash values
+    # Strip URL fragment (#...) — causes encoding issues in yt-dlp
     local clean_url="${url%%#*}"
     echo "[faphouse] Clean URL: $clean_url"
 
@@ -64,7 +63,7 @@ download() {
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
-        --cookies "$COOKIES_FILE" \
+        --cookies-from-browser "chromium:$BROWSER_PROFILE" \
         --trim-filenames 200 \
         --ignore-errors \
         --no-playlist \
