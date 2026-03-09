@@ -45,6 +45,7 @@ download() {
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
+        --trim-filenames 200 \
         --ignore-errors \
         --no-playlist \
         --retries 5 \

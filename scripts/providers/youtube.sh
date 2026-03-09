@@ -65,6 +65,7 @@ download() {
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
+        --trim-filenames 200 \
         --embed-subs \
         --sub-langs "en.*,en" \
         --ignore-errors \

@@ -37,6 +37,7 @@ download() {
         --output "$output_dir/%(title)s.%(ext)s" \
         --format "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best" \
         --merge-output-format mp4 \
+        --trim-filenames 200 \
         --ignore-errors \
         --no-playlist \
         --retries 5 \
