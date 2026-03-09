@@ -238,11 +238,21 @@ def main():
     url = sys.argv[1].split("#")[0]  # strip fragment
     domain = urllib.parse.urlparse(url).netloc.lstrip("www.")
 
-    print(f"[find-video] Fetching: {url}", file=sys.stderr)
+    # ---------------------------------------------------------------------------
+    # Strategy A: yt-dlp --flat-playlist --dump-json — pick longest video
+    # This is the most reliable approach since yt-dlp handles cookie decryption.
+    # ---------------------------------------------------------------------------
+    result = try_ytdlp_info(url)
+    if result:
+        print(result)
+        return
 
+    # ---------------------------------------------------------------------------
+    # Strategy B: Scrape page HTML ourselves with browser cookies
+    # ---------------------------------------------------------------------------
+    print(f"[find-video] Fetching page: {url}", file=sys.stderr)
     cookies = get_cookies(domain)
     print(f"[find-video] Loaded {len(cookies)} cookies for {domain}", file=sys.stderr)
-
     cookie_header = build_cookie_header(cookies)
     html = fetch_page(url, cookie_header)
     print(f"[find-video] Page size: {len(html)} chars", file=sys.stderr)
@@ -258,8 +268,59 @@ def main():
         print("[find-video] ERROR: No video URL found on page.", file=sys.stderr)
         sys.exit(1)
 
-    # Print the final URL to stdout for the shell script to capture
     print(result)
+
+
+def try_ytdlp_info(page_url):
+    """
+    Use yt-dlp --flat-playlist --dump-json to get all video entries,
+    then return the URL of the entry with the longest duration (the main video).
+    """
+    import subprocess
+    cmd = [
+        "yt-dlp",
+        "--cookies-from-browser", f"chromium:{BROWSER_COOKIES_DB.replace('/Default/Cookies', '')}",
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        "--quiet",
+        page_url,
+    ]
+    print(f"[find-video] Running yt-dlp info dump...", file=sys.stderr)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+    except Exception as e:
+        print(f"[find-video] yt-dlp info error: {e}", file=sys.stderr)
+        return None
+
+    if not lines:
+        print("[find-video] yt-dlp returned no entries.", file=sys.stderr)
+        return None
+
+    best_url = None
+    best_dur = -1
+    best_title = ""
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        duration = entry.get("duration") or 0
+        url = entry.get("url") or entry.get("webpage_url") or ""
+        title = entry.get("title") or ""
+        print(f"[find-video]   entry: dur={duration}s title={title[:50]} url={url[:80]}", file=sys.stderr)
+        if duration > best_dur:
+            best_dur = duration
+            best_url = url
+            best_title = title
+
+    if best_url and best_dur > 30:
+        print(f"[find-video] Best entry: dur={best_dur}s title={best_title[:60]}", file=sys.stderr)
+        return best_url
+
+    print(f"[find-video] No suitable long video found via yt-dlp info (best_dur={best_dur}s).", file=sys.stderr)
+    return None
 
 
 if __name__ == "__main__":
