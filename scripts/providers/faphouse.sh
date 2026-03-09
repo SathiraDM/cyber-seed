@@ -45,9 +45,24 @@ download() {
     echo "[faphouse] Reading cookies from browser profile: $BROWSER_PROFILE"
     mkdir -p "$output_dir"
 
-    # Strip URL fragment (#...) — causes encoding issues in yt-dlp
+    # Strip URL fragment (#...) — causes encoding issues
     local clean_url="${url%%#*}"
-    echo "[faphouse] Clean URL: $clean_url"
+    echo "[faphouse] Page URL: $clean_url"
+
+    # Find the real direct video/stream URL on the page
+    echo "[faphouse] Searching for real video URL on page..."
+    local video_url
+    video_url=$(python3 /scripts/find-video-url.py "$clean_url" 2>&1 | tee /dev/stderr | tail -1)
+
+    # Re-run cleanly capturing only stdout (the URL)
+    video_url=$(python3 /scripts/find-video-url.py "$clean_url" 2>/dev/null)
+
+    if [[ -z "$video_url" ]]; then
+        echo "[faphouse] WARNING: Could not find direct video URL, falling back to page URL with yt-dlp..."
+        video_url="$clean_url"
+    else
+        echo "[faphouse] Direct video URL: $video_url"
+    fi
 
     local -a fmt_flags
     case "$fmt" in
@@ -65,7 +80,6 @@ download() {
         "${fmt_flags[@]}" \
         --cookies-from-browser "chromium:$BROWSER_PROFILE" \
         --trim-filenames 200 \
-        --ignore-errors \
         --no-playlist \
         --retries 5 \
         --fragment-retries 5 \
@@ -73,7 +87,7 @@ download() {
         --newline \
         --progress \
         --add-header "Referer:https://faphouse.com" \
-        "$clean_url" 2>&1
+        "$video_url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
