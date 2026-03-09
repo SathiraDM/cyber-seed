@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import os
 import html as html_mod
+import hashlib
 import urllib.request
 import urllib.parse
 
@@ -27,20 +28,69 @@ BROWSER_COOKIES_DB = "/config/browser/chromium/Default/Cookies"
 PREFERRED_QUALITIES = ["2160", "1080", "720", "480", "360", "240"]
 
 
+def _decrypt_chromium_linux(encrypted_value: bytes) -> str:
+    """Decrypt a Chromium v10/v11 cookie value on Linux using the 'peanuts' key."""
+    try:
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes, padding
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.backends import default_backend
+    except ImportError:
+        return ""
+
+    if not encrypted_value.startswith((b"v10", b"v11")):
+        return encrypted_value.decode("utf-8", errors="ignore")
+
+    # Derive 128-bit AES key from password "peanuts"
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA1(),
+        length=16,
+        salt=b"saltysalt",
+        iterations=1,
+        backend=default_backend(),
+    )
+    key = kdf.derive(b"peanuts")
+
+    iv = b" " * 16
+    ciphertext = encrypted_value[3:]  # strip b"v10" / b"v11"
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+
+    # Remove PKCS7 padding
+    try:
+        unpadder = padding.PKCS7(128).unpadder()
+        decrypted = unpadder.update(decrypted) + unpadder.finalize()
+    except Exception:
+        decrypted = decrypted.rstrip(b"\x00").rstrip(b"\x08").rstrip(b"\x0f")
+
+    return decrypted.decode("utf-8", errors="ignore")
+
+
 def get_cookies(domain_filter):
-    """Read plaintext cookie values from Chromium SQLite DB for a domain."""
+    """Read cookie values from Chromium SQLite DB for a domain, decrypting as needed."""
     tmp = tempfile.mktemp(suffix=".db")
     shutil.copy2(BROWSER_COOKIES_DB, tmp)
     try:
         conn = sqlite3.connect(tmp)
         rows = conn.execute(
-            "SELECT name, value FROM cookies WHERE host_key LIKE ?",
+            "SELECT name, value, encrypted_value FROM cookies WHERE host_key LIKE ?",
             (f"%{domain_filter}%",)
         ).fetchall()
         conn.close()
     finally:
         os.unlink(tmp)
-    return {name: value for name, value in rows if value}
+
+    result = {}
+    for name, value, encrypted_value in rows:
+        if value:
+            result[name] = value
+        elif encrypted_value:
+            decrypted = _decrypt_chromium_linux(encrypted_value)
+            if decrypted:
+                result[name] = decrypted
+    return result
 
 
 def build_cookie_header(cookies):
