@@ -91,6 +91,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Shared logs directory so job logs are visible
       - ./logs:/logs
+      # Downloads directory for file manager
+      - ${DOWNLOADS_PATH:-./downloads}:/downloads:ro
     ports:
       - "${DOWNLOADER_PORT:-8888}:8888"
     depends_on:
