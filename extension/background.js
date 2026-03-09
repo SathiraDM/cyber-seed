@@ -18,9 +18,6 @@ async function loadConfig() {
   API_KEY  = data.apiKey  || '';
 }
 
-// Re-load config when storage changes
-chrome.storage.onChanged.addListener(() => loadConfig());
-
 // ── API helpers ──────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
   if (!API_BASE || !API_KEY) return null;
@@ -187,7 +184,22 @@ function sleep(ms) {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────
+// MV3 service workers go idle after ~30s; setInterval won't survive.
+// Use chrome.alarms (minimum 1 min) to wake the SW periodically, and
+// also poll immediately on every SW start.
+chrome.alarms.create('poll', { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'poll') pollQueue();
+});
+
+// Immediate poll every time the service worker starts (on install,
+// browser start, or wake from idle).
 loadConfig().then(() => {
-  setInterval(pollQueue, POLL_INTERVAL);
-  console.log('[cyberseed] Extension loaded, polling every', POLL_INTERVAL, 'ms');
+  pollQueue();
+  console.log('[cyberseed] Extension loaded — alarm set, immediate poll fired');
+});
+
+// Also re-poll when extension storage settings change (catches config save)
+chrome.storage.onChanged.addListener(() => {
+  loadConfig().then(() => pollQueue());
 });

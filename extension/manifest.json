@@ -3,7 +3,7 @@
   "name": "CyberSeed FapHouse Grabber",
   "version": "1.0",
   "description": "Extracts video CDN URLs from FapHouse and sends them to CyberSeed for download.",
-  "permissions": ["tabs", "scripting", "storage"],
+  "permissions": ["tabs", "scripting", "storage", "alarms"],
   "host_permissions": [
     "https://faphouse.com/*",
     "http://*/api/*"
