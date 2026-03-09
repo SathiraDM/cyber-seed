@@ -116,11 +116,11 @@ services:
       - TZ=${TZ:-UTC}
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
-      # Enable Chrome DevTools Protocol so scripts can intercept network requests
-      - CHROMIUM_EXTRA_PARAMS=--remote-debugging-port=9222 --remote-debugging-address=0.0.0.0
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
+      # Override params to enable CDP remote debugging
+      - ./config/browser/chromium-params.sh:/etc/services.d/app/params:ro
     ports:
       - "${BROWSER_PORT:-3456}:5800"
     shm_size: "1gb"

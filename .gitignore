@@ -9,9 +9,10 @@ config/rclone/*
 config/qbittorrent/*
 !config/qbittorrent/.gitkeep
 
-# Browser config — Chromium runtime state
+# Browser config — Chromium runtime state (ignored except our custom params)
 config/browser/*
 !config/browser/.gitkeep
+!config/browser/chromium-params.sh
 
 # Downloaded files
 downloads/incomplete/*
