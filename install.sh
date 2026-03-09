@@ -117,7 +117,12 @@ create_dirs() {
 
 # ── Make scripts executable ───────────────────────────────────────────
 fix_permissions() {
-    chmod +x scripts/on-complete.sh scripts/init-qbt.sh setup.sh start.sh stop.sh install.sh firewall.sh
+    chmod +x \
+        scripts/on-complete.sh \
+        scripts/init-qbt.sh \
+        scripts/download-url.sh \
+        scripts/providers/*.sh \
+        setup.sh start.sh stop.sh install.sh firewall.sh
     success "Script permissions set."
 }
 
