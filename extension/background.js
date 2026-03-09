@@ -8,13 +8,16 @@
 const POLL_INTERVAL = 5000;   // ms between queue checks
 const PAGE_TIMEOUT  = 20000;  // ms to wait for content script response
 
-// ── Config (set via storage) ─────────────────────────────────────────
-let API_BASE = '';   // e.g. http://35.232.101.41:8888
-let API_KEY  = '';   // QBT_WEBUI_PASS
+// ── Config (set via options page; these defaults are used as fallback) ─
+const DEFAULT_API_BASE = 'http://35.232.101.41:8888';
+const DEFAULT_API_KEY  = '';   // no hardcoded key — must be set in Options
+
+let API_BASE = DEFAULT_API_BASE;
+let API_KEY  = '';
 
 async function loadConfig() {
   const data = await chrome.storage.local.get(['apiBase', 'apiKey']);
-  API_BASE = data.apiBase || '';
+  API_BASE = data.apiBase || DEFAULT_API_BASE;
   API_KEY  = data.apiKey  || '';
 }
 
