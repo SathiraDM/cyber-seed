@@ -28,20 +28,47 @@ can_handle() {
     return 1
 }
 
+# ── Format selection ────────────────────────────────────────────────
+# Pass YT_FORMAT env var to choose quality. Supported values:
+#   best (default)  highest available video+audio
+#   2160p           4K
+#   1080p           Full HD
+#   720p            HD
+#   480p            SD
+#   360p            Low
+#   audio           Audio-only MP3
+_yt_format_args() {
+    local fmt="${YT_FORMAT:-best}"
+    case "$fmt" in
+        2160p) echo '--format' 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' '--merge-output-format' 'mp4' ;;
+        1080p) echo '--format' 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best' '--merge-output-format' 'mp4' ;;
+        720p)  echo '--format' 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best'  '--merge-output-format' 'mp4' ;;
+        480p)  echo '--format' 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best'  '--merge-output-format' 'mp4' ;;
+        360p)  echo '--format' 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best'  '--merge-output-format' 'mp4' ;;
+        audio) echo '--format' 'bestaudio/best' '--extract-audio' '--audio-format' 'mp3' '--audio-quality' '0' ;;
+        *)     echo '--format' 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best' '--merge-output-format' 'mp4' ;;
+    esac
+}
+
 download() {
     local url="$1"
     local output_dir="$2"
     local log_file="${3:-/dev/stderr}"
+    local fmt="${YT_FORMAT:-best}"
 
     echo "[youtube] Downloading: $url" >> "$log_file"
+    echo "[youtube] Format: $fmt" >> "$log_file"
     echo "[youtube] Output dir: $output_dir" >> "$log_file"
 
     mkdir -p "$output_dir"
 
+    # Read format args into an array
+    local format_args
+    readarray -t format_args < <(_yt_format_args)
+
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
-        --format "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best" \
-        --merge-output-format mp4 \
+        "${format_args[@]}" \
         --write-info-json \
         --write-thumbnail \
         --embed-subs \
@@ -57,7 +84,7 @@ download() {
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
-        echo "[youtube] Download complete." >> "$log_file"
+        echo "[youtube] Download complete ($fmt)." >> "$log_file"
     else
         echo "[youtube] ERROR: yt-dlp exited with code $exit_code" >> "$log_file"
     fi

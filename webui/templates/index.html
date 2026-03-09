@@ -62,6 +62,18 @@
               <input id="input-name" type="text" class="form-control bg-dark text-light border-secondary"
                 placeholder="e.g. my-video">
             </div>
+            <div class="mb-3">
+              <label class="form-label small text-secondary">Quality <span class="text-muted">(YouTube / yt-dlp)</span></label>
+              <select id="input-format" class="form-select bg-dark text-light border-secondary">
+                <option value="best" selected>Best available (default)</option>
+                <option value="2160p">4K — 2160p</option>
+                <option value="1080p">Full HD — 1080p</option>
+                <option value="720p">HD — 720p</option>
+                <option value="480p">SD — 480p</option>
+                <option value="360p">Low — 360p</option>
+                <option value="audio">Audio only — MP3</option>
+              </select>
+            </div>
             <button type="submit" class="btn btn-info w-100 fw-bold">
               <span id="submit-spinner" class="spinner-border spinner-xs me-2 d-none" role="status"></span>
               Dispatch
@@ -99,6 +111,7 @@
                 <tr>
                   <th class="ps-3">ID</th>
                   <th>URL / Name</th>
+                  <th>Format</th>
                   <th>Status</th>
                   <th>Started</th>
                   <th>Actions</th>
@@ -140,6 +153,7 @@ document.getElementById("url-submit-form").addEventListener("submit", async e =>
   e.preventDefault();
   const urls = document.getElementById("input-urls").value.trim();
   const name = document.getElementById("input-name").value.trim();
+  const format = document.getElementById("input-format").value;
   if (!urls) return;
 
   const spinner = document.getElementById("submit-spinner");
@@ -151,14 +165,13 @@ document.getElementById("url-submit-form").addEventListener("submit", async e =>
     const r = await fetch("/api/submit", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ urls, name })
+      body: JSON.stringify({ urls, name, format })
     });
     const data = await r.json();
     if (r.ok) {
       msg.innerHTML = `<span class="text-info">✓ Submitted ${data.submitted} job(s)</span>`;
       document.getElementById("input-urls").value = "";
-      document.getElementById("input-name").value = "";
-      loadJobs();
+      document.getElementById("input-name").value = "";      document.getElementById("input-format").value = "best";      loadJobs();
       if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
     } else {
       msg.innerHTML = `<span class="text-danger">✗ ${data.error}</span>`;
@@ -195,6 +208,7 @@ function renderJobs(jobs) {
   tbody.innerHTML = jobs.map(j => {
     const label    = j.name || j.url;
     const badge    = `<span class="badge badge-${j.status}">${j.status}</span>`;
+    const fmtLabel = j.format && j.format !== "best" ? `<span class="badge bg-secondary">${j.format}</span>` : `<span class="text-secondary" style="font-size:.7rem">best</span>`;
     const ts       = j.started_at ? j.started_at.replace("T"," ").slice(0,19) : "—";
     const cancel   = ["queued","running"].includes(j.status)
       ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="cancelJob('${j.id}',event)">✕</button>`
@@ -203,6 +217,7 @@ function renderJobs(jobs) {
     return `<tr class="job-row ${active}" onclick="openLog('${j.id}','${escHtml(label)}')">
       <td class="ps-3 text-secondary">${j.id}</td>
       <td class="url-col" title="${escHtml(j.url)}">${escHtml(label)}</td>
+      <td>${fmtLabel}</td>
       <td>${badge}</td>
       <td class="text-secondary">${ts}</td>
       <td>${cancel}</td>

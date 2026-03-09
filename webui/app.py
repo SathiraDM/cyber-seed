@@ -84,10 +84,12 @@ def run_job(job: dict):
         if name:
             cmd.append(name)
 
+        fmt = job.get("format", "best")
         exit_code, output = container.exec_run(
             cmd,
             stream=False,
             demux=False,
+            environment={"YT_FORMAT": fmt},
         )
         output_text = output.decode("utf-8", errors="replace") if output else ""
         with open(log_path, "a") as f:
@@ -111,11 +113,12 @@ def run_job(job: dict):
     upsert_job(job)
 
 
-def submit_job(url: str, name: str = "") -> dict:
+def submit_job(url: str, name: str = "", fmt: str = "best") -> dict:
     job = {
         "id":         str(uuid.uuid4())[:8],
         "url":        url.strip(),
         "name":       name.strip(),
+        "format":     fmt.strip() or "best",
         "status":     "queued",
         "started_at": datetime.utcnow().isoformat(),
         "ended_at":   None,
@@ -141,6 +144,7 @@ def api_submit():
     urls_raw  = data.get("urls", "")
     name      = data.get("name", "")
 
+    fmt   = data.get("format", "best")
     lines = [l.strip() for l in urls_raw.splitlines() if l.strip() and not l.startswith("#")]
     if not lines:
         return jsonify({"error": "No URLs provided"}), 400
@@ -150,7 +154,7 @@ def api_submit():
         parts   = line.split(None, 1)
         url     = parts[0]
         n       = parts[1] if len(parts) > 1 else name
-        jobs.append(submit_job(url, n))
+        jobs.append(submit_job(url, n, fmt))
 
     return jsonify({"submitted": len(jobs), "jobs": jobs})
 
