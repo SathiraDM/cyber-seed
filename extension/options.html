@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CyberSeed Extension Settings</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #0d1117; color: #c9d1d9; min-width: 400px; }
+    h2 { color: #0dcaf0; font-size: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 4px; }
+    input { width: 100%; padding: 8px; margin-bottom: 12px; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; font-size: 13px; }
+    input:focus { outline: none; border-color: #0dcaf0; }
+    button { background: #238636; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    button:hover { background: #2ea043; }
+    .status { font-size: 12px; margin-top: 8px; color: #3fb950; }
+    .hint { font-size: 11px; color: #484f58; margin-top: -8px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h2>⬡ CyberSeed Settings</h2>
+  <label>API Base URL</label>
+  <input id="apiBase" type="text" placeholder="http://35.232.101.41:8888" />
+  <div class="hint">Your CyberSeed web UI address (no trailing slash)</div>
+  <label>API Key (Web UI Password)</label>
+  <input id="apiKey" type="password" placeholder="Your QBT_WEBUI_PASS" />
+  <div class="hint">Same password you use to log in to CyberSeed</div>
+  <button id="save">Save</button>
+  <div class="status" id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>

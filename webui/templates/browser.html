@@ -39,6 +39,23 @@
     .log-content .err { color: #f85149; }
     .empty-state { grid-column: 1 / -1; text-align: center; padding: 3rem; font-size: .8rem; color: #444; line-height: 1.8; }
     .empty-state a { color: #0dcaf0; }
+    /* FapHouse queue section */
+    .fh-section { border-bottom: 1px solid #21262d; padding: .75rem 1rem; background: #0d1117; flex-shrink: 0; }
+    .fh-section h3 { font-size: .72rem; color: #0dcaf0; letter-spacing: 1px; text-transform: uppercase; margin-bottom: .5rem; }
+    .fh-row { display: flex; gap: .5rem; align-items: flex-start; }
+    .fh-row textarea { flex: 1; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: .5rem; font-size: .72rem; font-family: inherit; resize: vertical; min-height: 60px; max-height: 140px; }
+    .fh-row textarea:focus { outline: none; border-color: #0dcaf0; }
+    .fh-row textarea::placeholder { color: #484f58; }
+    .fh-btn { background: #8957e5; color: #fff; border: none; padding: .5rem 1rem; border-radius: 4px; font-size: .72rem; font-family: inherit; cursor: pointer; white-space: nowrap; }
+    .fh-btn:hover:not(:disabled) { background: #a371f7; }
+    .fh-btn:disabled { opacity: .45; cursor: default; }
+    .fh-queue-bar { margin-top: .5rem; display: flex; gap: .4rem; flex-wrap: wrap; }
+    .fh-pill { font-size: .62rem; padding: .15rem .5rem; border-radius: 10px; border: 1px solid #30363d; color: #8b949e; background: #161b22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+    .fh-pill.pending { border-color: #d29922; color: #d29922; }
+    .fh-pill.processing { border-color: #58a6ff; color: #58a6ff; }
+    .fh-pill.downloading { border-color: #3fb950; color: #3fb950; }
+    .fh-pill.done { border-color: #1a3a2a; color: #484f58; }
+    .fh-pill.failed { border-color: #f85149; color: #f85149; }
   </style>
 </head>
 <body>
@@ -56,8 +73,18 @@
 </div>
 
 <div class="layout">
+  <!-- FapHouse URL input -->
+  <div class="fh-section">
+    <h3>🎬 FapHouse Queue</h3>
+    <div class="fh-row">
+      <textarea id="fhUrls" placeholder="Paste faphouse.com video URLs here (one per line)..."></textarea>
+      <button class="fh-btn" id="fhSubmit" onclick="submitFhUrls()">Queue Downloads</button>
+    </div>
+    <div class="fh-queue-bar" id="fhQueueBar"></div>
+  </div>
+
   <div class="panel-header">
-    <span>📥 Browser Uploads</span>
+    <span>📥 Downloads</span>
     <button onclick="clearDone()">clear done</button>
   </div>
   <div class="jobs-list" id="jobsList">
@@ -80,7 +107,9 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('browserLink').href = url;
   document.getElementById('emptyBrowserLink').href = url;
   loadJobs();
+  loadFhQueue();
   setInterval(loadJobs, 5000);
+  setInterval(loadFhQueue, 5000);
 });
 
 let selectedJobId = null;
@@ -103,8 +132,8 @@ async function loadJobs() {
     jobs = await r.json();
   } catch { return; }
 
-  // Only browser source jobs
-  const browserJobs = jobs.filter(j => j.source === 'browser')
+  // Only browser + faphouse source jobs
+  const browserJobs = jobs.filter(j => ['browser','faphouse'].includes(j.source))
                           .sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
 
   const list = document.getElementById('jobsList');
@@ -168,12 +197,56 @@ function selectJob(jobId, name) {
 
 async function clearDone() {
   await fetch('/api/jobs?mode=finished', { method: 'DELETE' });
+  await fetch('/api/faphouse/queue/clear', { method: 'POST' });
   if (document.querySelector('.job-card.selected')?.classList.contains('badge-done')) {
     selectedJobId = null;
     document.getElementById('logContent').innerHTML = '';
     document.getElementById('logPaneHeader').textContent = '— select a job —';
   }
   loadJobs();
+  loadFhQueue();
+}
+
+// ── FapHouse Queue ────────────────────────────────────
+async function submitFhUrls() {
+  const textarea = document.getElementById('fhUrls');
+  const btn = document.getElementById('fhSubmit');
+  const urls = textarea.value.trim();
+  if (!urls) return;
+  btn.disabled = true;
+  btn.textContent = 'Queueing...';
+  try {
+    const r = await fetch('/api/faphouse/queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    });
+    const data = await r.json();
+    if (data.error) { alert(data.error); return; }
+    textarea.value = '';
+    loadFhQueue();
+  } catch (e) { alert('Error: ' + e); }
+  finally { btn.disabled = false; btn.textContent = 'Queue Downloads'; }
+}
+
+async function loadFhQueue() {
+  let items;
+  try {
+    const r = await fetch('/api/faphouse/queue/all');
+    items = await r.json();
+  } catch { return; }
+
+  const bar = document.getElementById('fhQueueBar');
+  bar.innerHTML = '';
+  // Show most recent first, limit to 30
+  items.slice().reverse().slice(0, 30).forEach(item => {
+    const pill = document.createElement('span');
+    pill.className = 'fh-pill ' + item.status;
+    const label = item.title || item.url.split('/').pop() || item.url;
+    pill.textContent = `[${item.status}] ${label}`;
+    pill.title = item.url + (item.error ? '\n\nError: ' + item.error : '');
+    bar.appendChild(pill);
+  });
 }
 </script>
 </body>

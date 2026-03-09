@@ -36,6 +36,10 @@ JOBS_DIR.mkdir(parents=True, exist_ok=True)
 def login_required(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
+        # Allow API key auth for extension calls
+        api_key = request.headers.get("X-Api-Key", "")
+        if api_key and api_key == WEBUI_PASS:
+            return f(*args, **kwargs)
         if not session.get("logged_in"):
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Unauthorized"}), 401
@@ -146,6 +150,7 @@ _SOURCE_PATTERNS = [
     ("youtube",        r'(youtube\.com|youtu\.be)'),
     ("facebook",       r'(facebook\.com|fb\.watch|fb\.com)'),
     ("noodlemagazine", r'noodlemagazine\.com'),
+    ("faphouse",       r'faphouse\.com'),
     ("vimeo",          r'vimeo\.com'),
     ("twitter",        r'(twitter\.com|x\.com)'),
     ("instagram",      r'instagram\.com'),
@@ -405,6 +410,207 @@ def api_files_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"deleted": rel})
+
+# ── FapHouse Queue ────────────────────────────────────────────────────
+FH_QUEUE  = Path("/logs/faphouse-queue.json")
+_fh_lock  = threading.Lock()
+
+def load_fh_queue() -> list:
+    try:
+        if FH_QUEUE.exists():
+            return json.loads(FH_QUEUE.read_text())
+    except Exception:
+        pass
+    return []
+
+def save_fh_queue(q: list):
+    FH_QUEUE.write_text(json.dumps(q, indent=2))
+
+
+@app.route("/api/faphouse/queue", methods=["POST"])
+@login_required
+def fh_queue_add():
+    """Add faphouse URLs to the queue. Body: {urls: "url1\nurl2\n..."}."""
+    data = request.get_json(force=True) or {}
+    raw  = data.get("urls", "")
+    urls = [u.strip() for u in raw.strip().splitlines() if u.strip() and "faphouse.com" in u]
+    if not urls:
+        return jsonify({"error": "No valid faphouse URLs"}), 400
+
+    added = []
+    with _fh_lock:
+        q = load_fh_queue()
+        existing_urls = {item["url"] for item in q}
+        for url in urls:
+            if url in existing_urls:
+                continue
+            item = {
+                "id":      str(uuid.uuid4())[:8],
+                "url":     url,
+                "status":  "pending",
+                "title":   "",
+                "error":   "",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+            q.append(item)
+            added.append(item)
+        save_fh_queue(q)
+
+    return jsonify({"added": len(added), "items": added})
+
+
+@app.route("/api/faphouse/queue", methods=["GET"])
+@login_required
+def fh_queue_get():
+    """Return pending queue items (for the extension to process)."""
+    with _fh_lock:
+        q = load_fh_queue()
+    pending = [i for i in q if i["status"] == "pending"]
+    return jsonify(pending)
+
+
+@app.route("/api/faphouse/queue/all", methods=["GET"])
+@login_required
+def fh_queue_all():
+    """Return all queue items with status."""
+    with _fh_lock:
+        q = load_fh_queue()
+    return jsonify(q)
+
+
+@app.route("/api/faphouse/queue/<item_id>/status", methods=["POST"])
+@login_required
+def fh_queue_status(item_id):
+    """Extension updates item status (processing / failed)."""
+    data = request.get_json(force=True) or {}
+    new_status = data.get("status", "")
+    error_msg  = data.get("error", "")
+    with _fh_lock:
+        q = load_fh_queue()
+        for item in q:
+            if item["id"] == item_id:
+                item["status"] = new_status
+                if error_msg:
+                    item["error"] = error_msg
+                break
+        save_fh_queue(q)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/faphouse/resolve", methods=["POST"])
+@login_required
+def fh_resolve():
+    """Extension sends resolved CDN URL. Backend downloads it."""
+    data     = request.get_json(force=True) or {}
+    item_id  = data.get("id", "")
+    cdn_url  = data.get("cdn_url", "")
+    title    = data.get("title", "") or "faphouse_video"
+    quality  = data.get("quality", "")
+
+    if not cdn_url:
+        return jsonify({"error": "No cdn_url"}), 400
+
+    # Sanitise filename
+    safe_name = re.sub(r'[^\w\s\-.]', '', title)[:200].strip() or "faphouse_video"
+    if quality:
+        safe_name = f"{safe_name} [{quality}]"
+    safe_name += ".mp4"
+
+    # Update queue item
+    with _fh_lock:
+        q = load_fh_queue()
+        for item in q:
+            if item["id"] == item_id:
+                item["status"] = "downloading"
+                item["title"]  = title
+                break
+        save_fh_queue(q)
+
+    # Create a job and download in background
+    job_id   = str(uuid.uuid4())[:8]
+    log_path = JOBS_DIR / f"{job_id}.log"
+    job = {
+        "id":         job_id,
+        "url":        cdn_url,
+        "name":       safe_name,
+        "source":     "faphouse",
+        "format":     quality or "best",
+        "status":     "running",
+        "started_at": datetime.utcnow().isoformat(),
+        "ended_at":   None,
+    }
+    upsert_job(job)
+
+    def _download():
+        try:
+            with open(log_path, "a") as f:
+                f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] Downloading: {safe_name}\n")
+                f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] CDN URL: {cdn_url[:80]}...\n")
+                f.flush()
+
+            container = docker_client.containers.get(QBT_CONTAINER)
+            cmd = [
+                "aria2c",
+                "--dir=/downloads/browser",
+                f"--out={safe_name}",
+                "--max-connection-per-server=16",
+                "--split=16",
+                "--min-split-size=1M",
+                "--summary-interval=5",
+                "--console-log-level=notice",
+                cdn_url,
+            ]
+            exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
+            stream  = docker_client.api.exec_start(exec_id, stream=True)
+
+            with open(log_path, "a") as f:
+                for chunk in stream:
+                    if chunk:
+                        f.write(chunk.decode("utf-8", errors="replace"))
+                        f.flush()
+
+            exit_code = docker_client.api.exec_inspect(exec_id)["ExitCode"]
+
+            if exit_code == 0:
+                job["status"] = "done"
+                with open(log_path, "a") as f:
+                    f.write(f"\n✓ Download complete: {safe_name}\n")
+            else:
+                job["status"] = "failed"
+                with open(log_path, "a") as f:
+                    f.write(f"\n✗ aria2c exited with code {exit_code}\n")
+
+        except Exception as e:
+            job["status"] = "failed"
+            with open(log_path, "a") as f:
+                f.write(f"\nERROR: {e}\n")
+
+        job["ended_at"] = datetime.utcnow().isoformat()
+        upsert_job(job)
+
+        # Update queue item status
+        with _fh_lock:
+            q_ = load_fh_queue()
+            for it in q_:
+                if it["id"] == item_id:
+                    it["status"] = "done" if job["status"] == "done" else "failed"
+                    break
+            save_fh_queue(q_)
+
+    threading.Thread(target=_download, daemon=True).start()
+    return jsonify({"job_id": job_id, "name": safe_name})
+
+
+@app.route("/api/faphouse/queue/clear", methods=["POST"])
+@login_required
+def fh_queue_clear():
+    """Remove completed/failed items from queue."""
+    with _fh_lock:
+        q = load_fh_queue()
+        q = [i for i in q if i["status"] in ("pending", "processing", "downloading")]
+        save_fh_queue(q)
+    return jsonify({"ok": True})
+
 
 # ── Browser ───────────────────────────────────────────────────────────
 @app.route("/browser")

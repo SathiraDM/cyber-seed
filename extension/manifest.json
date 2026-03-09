@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "CyberSeed FapHouse Grabber",
+  "version": "1.0",
+  "description": "Extracts video CDN URLs from FapHouse and sends them to CyberSeed for download.",
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": [
+    "https://faphouse.com/*",
+    "http://*/api/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://faphouse.com/videos/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
