@@ -32,8 +32,9 @@ services:
       - ./scripts:/scripts:ro
       # Custom init script to inject qBittorrent AutoRun settings
       - ./scripts/init-qbt.sh:/custom-cont-init.d/99-init-qbt.sh:ro
-      # Browser download watcher (s6 long-running service)
-      - ./scripts/browser-upload-watcher.sh:/custom-services.d/browser-watcher/run:ro
+      # Browser download watcher — launched via cont-init.d (lsio s6-overlay v3)
+      - ./scripts/browser-upload-watcher.sh:/scripts/browser-upload-watcher.sh:ro
+      - ./scripts/browser-watcher-launch.sh:/custom-cont-init.d/98-browser-watcher.sh:ro
       # Upload logs
       - ./logs:/logs
     ports:
