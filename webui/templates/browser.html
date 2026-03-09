@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CyberSeed — Browser</title>
+  <!-- browser.html: inline virtual browser + upload job monitor -->
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code','Fira Code',monospace; display: flex; flex-direction: column; height: 100vh; }
@@ -13,30 +14,31 @@
     .toolbar .brand { color: #0dcaf0; font-weight: 700; letter-spacing: 2px; border: none; font-size: .85rem; }
     .toolbar .active-page { color: #ffc107; border: none; font-size: .8rem; }
     .toolbar .spacer { flex: 1; }
-    .main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 2rem; }
-    .launch-btn { background: #238636; color: #fff; border: none; padding: 1rem 2.5rem; border-radius: 8px; font-size: 1.1rem; font-family: inherit; cursor: pointer; letter-spacing: 1px; transition: background .2s; display: flex; align-items: center; gap: .6rem; }
-    .launch-btn:hover { background: #2ea043; }
-    .info-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.2rem 1.5rem; max-width: 500px; width: 100%; }
-    .info-card h3 { font-size: .85rem; color: #0dcaf0; margin-bottom: .6rem; }
-    .info-card p { font-size: .75rem; color: #8b949e; line-height: 1.6; margin: .3rem 0; }
-    .info-card .highlight { color: #ffc107; }
-    .info-card code { background: #21262d; padding: .15rem .4rem; border-radius: 3px; font-size: .72rem; color: #c9d1d9; }
-    .section-title { font-size: .7rem; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; max-width: 500px; width: 100%; padding-bottom: .4rem; border-bottom: 1px solid #21262d; }
-    .cookie-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.2rem 1.5rem; max-width: 500px; width: 100%; display: flex; flex-direction: column; gap: .8rem; }
-    .cookie-card h3 { font-size: .85rem; color: #0dcaf0; margin: 0; }
-    .cookie-card p { font-size: .75rem; color: #8b949e; line-height: 1.6; margin: 0; }
-    .cookie-card .steps { font-size: .74rem; color: #8b949e; padding-left: 1.2rem; line-height: 1.9; }
-    .cookie-card .steps li span { color: #c9d1d9; }
-    .export-row { display: flex; gap: .6rem; align-items: center; }
-    .export-btn { background: #1f6feb; color: #fff; border: none; padding: .55rem 1.2rem; border-radius: 6px; font-size: .8rem; font-family: inherit; cursor: pointer; transition: background .2s; white-space: nowrap; }
-    .export-btn:hover:not(:disabled) { background: #388bfd; }
-    .export-btn:disabled { opacity: .45; cursor: default; }
-    .domain-input { flex: 1; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: .45rem .7rem; font-size: .8rem; font-family: inherit; }
-    .domain-input:focus { outline: none; border-color: #1f6feb; }
-    .log-box { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: .7rem; font-size: .72rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #8b949e; min-height: 60px; max-height: 180px; overflow-y: auto; display: none; }
-    .log-box.visible { display: block; }
-    .log-box .ok  { color: #3fb950; }
-    .log-box .err { color: #f85149; }
+    .layout { flex: 1; display: flex; min-height: 0; }
+    .browser-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .browser-pane iframe { flex: 1; border: none; width: 100%; height: 100%; }
+    .side-pane { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid #21262d; background: #0d1117; overflow: hidden; }
+    .side-header { padding: .6rem .8rem; background: #161b22; border-bottom: 1px solid #21262d; font-size: .72rem; color: #8b949e; letter-spacing: 1px; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
+    .side-header span { color: #0dcaf0; font-weight: 700; }
+    .side-header button { font-size: .68rem; background: transparent; border: 1px solid #30363d; color: #8b949e; padding: .15rem .5rem; border-radius: 3px; cursor: pointer; }
+    .side-header button:hover { color: #c9d1d9; border-color: #8b949e; }
+    .jobs-list { flex: 1; overflow-y: auto; padding: .5rem; display: flex; flex-direction: column; gap: .4rem; }
+    .job-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: .6rem .8rem; cursor: pointer; transition: border-color .15s; }
+    .job-card:hover { border-color: #8b949e; }
+    .job-card.selected { border-color: #0dcaf0; }
+    .job-name { font-size: .75rem; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: .25rem; }
+    .job-meta { font-size: .68rem; color: #8b949e; display: flex; gap: .6rem; align-items: center; }
+    .badge { padding: .1rem .4rem; border-radius: 3px; font-size: .65rem; font-weight: 700; text-transform: uppercase; }
+    .badge-running { background: #1f4068; color: #58a6ff; }
+    .badge-done    { background: #1a3a2a; color: #3fb950; }
+    .badge-failed  { background: #3d1a1a; color: #f85149; }
+    .badge-queued  { background: #2d2a1a; color: #d29922; }
+    .log-pane { height: 220px; border-top: 1px solid #21262d; display: flex; flex-direction: column; }
+    .log-pane-header { padding: .35rem .8rem; font-size: .68rem; color: #8b949e; background: #161b22; border-bottom: 1px solid #21262d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .log-content { flex: 1; overflow-y: auto; padding: .5rem .7rem; font-size: .68rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #8b949e; }
+    .log-content .ok  { color: #3fb950; }
+    .log-content .err { color: #f85149; }
+    .empty-state { text-align: center; padding: 2rem; font-size: .75rem; color: #444; }
   </style>
 </head>
 <body>
@@ -52,90 +54,128 @@
   </form>
 </div>
 
-<div class="main">
-  <button class="launch-btn" onclick="openBrowser()">
-    🌐 Launch Virtual Browser
-  </button>
-
-  <div class="info-card">
-    <h3>Virtual Browser (Chromium)</h3>
-    <p>Opens a full Chromium browser in a new tab via noVNC (plain HTTP).</p>
-    <p>📥 Downloads in the browser auto-upload to <span class="highlight">OneDrive/WebDownloads</span>.</p>
+<div class="layout">
+  <!-- Left: inline browser iframe -->
+  <div class="browser-pane">
+    <iframe id="browserFrame" src="" title="Virtual Browser"></iframe>
   </div>
 
-  <p class="section-title">🍪 Authenticated Downloads</p>
-
-  <div class="cookie-card">
-    <h3>Export Site Cookies</h3>
-    <p>Log in to a site in the virtual browser, then export its cookies so CyberSeed can download members-only content.</p>
-    <ol class="steps">
-      <li><span>Open the virtual browser above</span></li>
-      <li><span>Log in to the site normally</span></li>
-      <li><span>Come back here, enter the domain and click Export</span></li>
-      <li><span>Paste the site URL into the downloader as usual</span></li>
-    </ol>
-    <div class="export-row">
-      <input class="domain-input" id="domainInput" type="text" placeholder="e.g. example.com" />
-      <button class="export-btn" id="exportBtn" onclick="exportCookies()">Export Cookies</button>
+  <!-- Right: upload job monitor -->
+  <div class="side-pane">
+    <div class="side-header">
+      <span>📥 Browser Uploads</span>
+      <button onclick="clearDone()">clear done</button>
     </div>
-    <div class="log-box" id="logBox"></div>
+    <div class="jobs-list" id="jobsList">
+      <div class="empty-state" id="emptyState">No uploads yet.<br>Downloads saved to /downloads/browser<br>will appear here automatically.</div>
+    </div>
+    <div class="log-pane">
+      <div class="log-pane-header" id="logPaneHeader">— select a job to view log —</div>
+      <div class="log-content" id="logContent"></div>
+    </div>
   </div>
 </div>
 
 <script>
-function openBrowser() {
+// Load browser iframe on page load
+window.addEventListener('DOMContentLoaded', () => {
   const host = window.location.hostname;
-  window.open('http://' + host + ':3456/', '_blank');
+  document.getElementById('browserFrame').src = 'http://' + host + ':3456/';
+  loadJobs();
+  setInterval(loadJobs, 5000);
+});
+
+let selectedJobId = null;
+let logEventSource = null;
+let autoScroll = true;
+
+function formatTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso + 'Z').toLocaleTimeString(); } catch { return iso; }
 }
 
-async function exportCookies() {
-  let domain = document.getElementById('domainInput').value.trim();
-  // Strip protocol and path — keep bare hostname only
-  try { domain = new URL(domain.includes('://') ? domain : 'https://' + domain).hostname; } catch(e) {}
-  domain = domain.replace(/^www\./, '');
-  if (!domain) { alert('Enter a domain first.'); return; }
+function badgeHtml(status) {
+  return `<span class="badge badge-${status}">${status}</span>`;
+}
 
-  const btn = document.getElementById('exportBtn');
-  const log = document.getElementById('logBox');
-  btn.disabled = true;
-  btn.textContent = 'Exporting…';
-  log.className = 'log-box visible';
-  log.innerHTML = '';
-
+async function loadJobs() {
+  let jobs;
   try {
-    const res = await fetch('/api/export-cookies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain })
-    });
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let full = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      full += chunk;
-      log.innerHTML = full
-        .replace(/(__SUCCESS__.*)/g, '<span class="ok">$1</span>')
-        .replace(/(__FAILED__.*)/g, '<span class="err">$1</span>')
-        .replace(/(ERROR:.*)/g, '<span class="err">$1</span>');
-      log.scrollTop = log.scrollHeight;
+    const r = await fetch('/api/jobs');
+    jobs = await r.json();
+  } catch { return; }
+
+  // Only browser source jobs
+  const browserJobs = jobs.filter(j => j.source === 'browser')
+                          .sort((a, b) => (b.started_at || '').localeCompare(a.started_at || ''));
+
+  const list = document.getElementById('jobsList');
+  document.getElementById('emptyState').style.display = browserJobs.length ? 'none' : '';
+
+  // Build cards
+  const existing = {};
+  list.querySelectorAll('.job-card').forEach(el => existing[el.dataset.id] = el);
+
+  browserJobs.forEach(job => {
+    let card = existing[job.id];
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'job-card' + (job.id === selectedJobId ? ' selected' : '');
+      card.dataset.id = job.id;
+      card.onclick = () => selectJob(job.id, job.name);
+      list.appendChild(card);
     }
-    if (full.includes('__SUCCESS__')) {
-      btn.textContent = '✓ Done';
-      btn.style.background = '#238636';
-    } else {
-      btn.textContent = '✗ Failed';
-      btn.style.background = '#da3633';
+    card.innerHTML = `
+      <div class="job-name" title="${job.name}">${job.name}</div>
+      <div class="job-meta">${badgeHtml(job.status)}<span>${formatTime(job.started_at)}</span></div>
+    `;
+    delete existing[job.id];
+  });
+
+  // Remove stale cards
+  Object.values(existing).forEach(el => el.remove());
+
+  // If selected job just finished, refresh log once more
+  if (selectedJobId) {
+    const sel = browserJobs.find(j => j.id === selectedJobId);
+    if (sel && ['done','failed'].includes(sel.status) && logEventSource) {
+      // SSE will send [DONE] itself, nothing to do
     }
-  } catch (e) {
-    log.innerHTML += `<span class="err">Network error: ${e}</span>`;
-    btn.textContent = '✗ Error';
-    btn.style.background = '#da3633';
-  } finally {
-    btn.disabled = false;
   }
+}
+
+function selectJob(jobId, name) {
+  selectedJobId = jobId;
+  document.querySelectorAll('.job-card').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === jobId);
+  });
+  document.getElementById('logPaneHeader').textContent = name;
+  document.getElementById('logContent').innerHTML = '';
+
+  if (logEventSource) { logEventSource.close(); logEventSource = null; }
+
+  const logContent = document.getElementById('logContent');
+  logEventSource = new EventSource(`/api/jobs/${jobId}/log`);
+  logEventSource.onmessage = (e) => {
+    if (e.data === '[DONE]') { logEventSource.close(); logEventSource = null; return; }
+    const line = document.createElement('div');
+    const text = e.data;
+    line.className = text.includes('✓') || text.includes('SUCCESS') ? 'ok'
+                   : text.includes('✗') || text.includes('FAIL') || text.includes('ERROR') ? 'err' : '';
+    line.textContent = text;
+    logContent.appendChild(line);
+    if (autoScroll) logContent.scrollTop = logContent.scrollHeight;
+  };
+}
+
+async function clearDone() {
+  await fetch('/api/jobs?mode=finished', { method: 'DELETE' });
+  if (document.querySelector('.job-card.selected')?.classList.contains('badge-done')) {
+    selectedJobId = null;
+    document.getElementById('logContent').innerHTML = '';
+    document.getElementById('logPaneHeader').textContent = '— select a job —';
+  }
+  loadJobs();
 }
 </script>
 </body>
