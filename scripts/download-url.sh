@@ -12,14 +12,14 @@
 #    download <url> <output_dir> <log_file>
 #
 #  Environment (from docker-compose):
-#    ONEDRIVE_REMOTE, ONEDRIVE_PATH, RCLONE_CONFIG
+#    ONEDRIVE_REMOTE, WEBDL_PATH, RCLONE_CONFIG
 # ─────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────
 REMOTE="${ONEDRIVE_REMOTE:-onedrive}"
-REMOTE_PATH="${ONEDRIVE_PATH:-/Torrents}"
+REMOTE_PATH="${WEBDL_PATH:-/WebDownloads}"
 RCLONE_CONF="${RCLONE_CONFIG:-/config/rclone/rclone.conf}"
 DOWNLOADS_BASE="/downloads"
 LOG_FILE="/logs/download-url.log"

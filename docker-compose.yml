@@ -17,6 +17,8 @@ services:
       - ONEDRIVE_REMOTE=${ONEDRIVE_REMOTE:-onedrive}
       # Target path on OneDrive/SharePoint
       - ONEDRIVE_PATH=${ONEDRIVE_PATH:-/Torrents}
+      # Target folder for web/URL downloads (separate from torrents)
+      - WEBDL_PATH=${WEBDL_PATH:-/WebDownloads}
       # qBittorrent Web UI password (set during setup.sh, hashed by init-qbt.sh)
       - QBT_WEBUI_PASS=${QBT_WEBUI_PASS:-}
     volumes:
