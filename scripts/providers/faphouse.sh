@@ -78,13 +78,21 @@ download() {
     if [[ "$fmt" == "audio" ]]; then
         fmt_flags=(--format 'bestaudio/best' --extract-audio --audio-format mp3 --audio-quality 0)
     else
-        # Direct MP4/m3u8 URL — let yt-dlp pick best available from the direct link
-        fmt_flags=(--format 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best' --merge-output-format mp4)
+        # Direct m3u8 URL — select the right HLS quality by height
+        case "$fmt" in
+            2160p) fmt_flags=(--format 'best[height<=2160]/best') ;;
+            1080p) fmt_flags=(--format 'best[height<=1080]/best') ;;
+            720p)  fmt_flags=(--format 'best[height<=720]/best')  ;;
+            480p)  fmt_flags=(--format 'best[height<=480]/best')  ;;
+            360p)  fmt_flags=(--format 'best[height<=360]/best')  ;;
+            *)     fmt_flags=(--format 'best')                    ;;
+        esac
     fi
 
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
+        --cookies-from-browser "chromium:$BROWSER_PROFILE" \
         --trim-filenames 200 \
         --retries 5 \
         --fragment-retries 5 \
@@ -92,6 +100,7 @@ download() {
         --newline \
         --progress \
         --add-header "Referer:https://faphouse.com" \
+        --add-header "Origin:https://faphouse.com" \
         "$video_url" 2>&1
 
     local exit_code=$?
