@@ -89,7 +89,10 @@ function openBrowser() {
 }
 
 async function exportCookies() {
-  const domain = document.getElementById('domainInput').value.trim();
+  let domain = document.getElementById('domainInput').value.trim();
+  // Strip protocol and path — keep bare hostname only
+  try { domain = new URL(domain.includes('://') ? domain : 'https://' + domain).hostname; } catch(e) {}
+  domain = domain.replace(/^www\./, '');
   if (!domain) { alert('Enter a domain first.'); return; }
 
   const btn = document.getElementById('exportBtn');

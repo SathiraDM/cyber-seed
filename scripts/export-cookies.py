@@ -32,6 +32,12 @@ CHROMIUM_PROFILE_SEARCH_PATHS = [
 OUTPUT_FILE = "/config/rclone/faphouse-cookies.txt"
 
 domain_filter = sys.argv[1] if len(sys.argv) > 1 else None
+# Strip protocol/path if user passed a full URL
+if domain_filter:
+    if '://' in domain_filter:
+        from urllib.parse import urlparse
+        domain_filter = urlparse(domain_filter).hostname or domain_filter
+    domain_filter = domain_filter.lstrip('www.').strip('/')
 
 
 def find_cookies_db():
