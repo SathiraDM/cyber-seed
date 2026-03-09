@@ -141,11 +141,16 @@ print(name[:100] or 'download')
     local output_dir="${DOWNLOADS_BASE}/${output_name}"
     mkdir -p "$output_dir"
 
+    # Disable errexit so a non-zero exit from the provider doesn't
+    # get swallowed — we capture it explicitly below
+    set +e
     (
+        set +e
         source "$provider_file"
         download "$url" "$output_dir" "$LOG_FILE"
     )
     local dl_exit=$?
+    set -e
 
     if [[ $dl_exit -ne 0 ]]; then
         log "DOWNLOAD FAILED: $url (exit $dl_exit)"
