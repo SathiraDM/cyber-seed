@@ -49,21 +49,6 @@ download() {
     local clean_url="${url%%#*}"
     echo "[faphouse] Page URL: $clean_url"
 
-    # Find the real direct video/stream URL on the page
-    echo "[faphouse] Searching for real video URL on page..."
-    local video_url
-    video_url=$(python3 /scripts/find-video-url.py "$clean_url" 2>&1 | tee /dev/stderr | tail -1)
-
-    # Re-run cleanly capturing only stdout (the URL)
-    video_url=$(python3 /scripts/find-video-url.py "$clean_url" 2>/dev/null)
-
-    if [[ -z "$video_url" ]]; then
-        echo "[faphouse] WARNING: Could not find direct video URL, falling back to page URL with yt-dlp..."
-        video_url="$clean_url"
-    else
-        echo "[faphouse] Direct video URL: $video_url"
-    fi
-
     local -a fmt_flags
     case "$fmt" in
         2160p) fmt_flags=(--format 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' --merge-output-format mp4) ;;
@@ -79,6 +64,7 @@ download() {
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
         --cookies-from-browser "chromium:$BROWSER_PROFILE" \
+        --match-filter "duration>60" \
         --trim-filenames 200 \
         --no-playlist \
         --retries 5 \
@@ -87,7 +73,7 @@ download() {
         --newline \
         --progress \
         --add-header "Referer:https://faphouse.com" \
-        "$video_url" 2>&1
+        "$clean_url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
