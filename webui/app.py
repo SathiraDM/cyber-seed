@@ -19,8 +19,6 @@ from pathlib import Path
 
 from flask import (Flask, Response, jsonify, redirect, render_template,
                    request, send_file, session, stream_with_context, url_for)
-import requests as http_requests
-from urllib.parse import urljoin, urlparse, quote
 
 app = Flask(__name__)
 
@@ -408,85 +406,11 @@ def api_files_delete():
         return jsonify({"error": str(e)}), 500
     return jsonify({"deleted": rel})
 
-# ── Browser / Proxy ───────────────────────────────────────────────────
-_PROXY_SESSION = http_requests.Session()
-_PROXY_SESSION.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-})
-
+# ── Browser ───────────────────────────────────────────────────────────
 @app.route("/browser")
 @login_required
 def browser_page():
     return render_template("browser.html")
-
-@app.route("/proxy")
-@login_required
-def proxy_page():
-    """Fetch a URL and rewrite it so links stay in the proxy."""
-    target_url = request.args.get("url", "")
-    if not target_url:
-        return "No URL provided", 400
-    if not target_url.startswith(("http://", "https://")):
-        target_url = "https://" + target_url
-
-    try:
-        resp = _PROXY_SESSION.get(target_url, timeout=15, allow_redirects=True)
-    except Exception as e:
-        return f"<html><body style='background:#0d1117;color:#c9d1d9;padding:2rem'>"\
-               f"<h3>Failed to load</h3><p>{e}</p></body></html>", 502
-
-    content_type = resp.headers.get("Content-Type", "")
-
-    # For non-HTML content (images, CSS, JS, etc.), pass through directly
-    if "text/html" not in content_type:
-        excluded = {"transfer-encoding", "content-encoding", "content-length",
-                    "connection"}
-        headers = {k: v for k, v in resp.headers.items()
-                   if k.lower() not in excluded}
-        return Response(resp.content, status=resp.status_code,
-                        headers=headers, content_type=content_type)
-
-    # HTML rewriting
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(resp.text, "html.parser")
-    base_url = resp.url  # after redirects
-
-    def rewrite_url(u):
-        if not u or u.startswith(("data:", "javascript:", "#", "mailto:")):
-            return u
-        absolute = urljoin(base_url, u)
-        return f"/proxy?url={quote(absolute, safe='')}"
-
-    # Rewrite links
-    for tag in soup.find_all("a", href=True):
-        tag["href"] = rewrite_url(tag["href"])
-        tag["target"] = "_self"  # stay in iframe
-    for tag in soup.find_all("img", src=True):
-        tag["src"] = rewrite_url(tag["src"])
-    for tag in soup.find_all("script", src=True):
-        tag["src"] = rewrite_url(tag["src"])
-    for tag in soup.find_all("link", href=True):
-        tag["href"] = rewrite_url(tag["href"])
-    for tag in soup.find_all("source", src=True):
-        tag["src"] = rewrite_url(tag["src"])
-    for tag in soup.find_all("video", src=True):
-        tag["src"] = rewrite_url(tag["src"])
-    for tag in soup.find_all("form", action=True):
-        tag["action"] = rewrite_url(tag["action"])
-
-    # Inject a script that posts the current URL to parent when iframe navigates
-    notify_script = soup.new_tag("script")
-    notify_script.string = (
-        "window.addEventListener('load', function() {"
-        "  try { window.parent.postMessage({proxyUrl: '" + base_url.replace("'", "\\'")
-        + "'}, '*'); } catch(e) {}"
-        "});"
-    )
-    if soup.body:
-        soup.body.append(notify_script)
-
-    return str(soup)
 
 
 if __name__ == "__main__":

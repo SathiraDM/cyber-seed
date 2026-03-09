@@ -4,186 +4,41 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CyberSeed — Browser</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    :root { --accent: #0dcaf0; }
-    * { box-sizing: border-box; }
-    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code','Fira Code',monospace; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-    .navbar-brand { color: var(--accent) !important; font-weight: 700; letter-spacing: 2px; }
-    .toolbar { background: #161b22; border-bottom: 1px solid #30363d; padding: .4rem .8rem; display: flex; gap: .5rem; align-items: center; flex-shrink: 0; }
-    .url-bar { flex: 1; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: .35rem .7rem; font-size: .82rem; font-family: inherit; outline: none; }
-    .url-bar:focus { border-color: var(--accent); }
-    .toolbar .btn { font-size: .75rem; padding: .25rem .6rem; }
-    #browser-frame { flex: 1; border: none; width: 100%; background: #0d1117; }
-    .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
-    .download-bar { background: #161b22; border-top: 1px solid #30363d; padding: .4rem .8rem; display: flex; gap: .5rem; align-items: center; flex-shrink: 0; }
-    .download-bar .info { font-size: .75rem; color: #8b949e; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code','Fira Code',monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .toolbar { background: #161b22; border-bottom: 1px solid #30363d; padding: .35rem .8rem; display: flex; gap: .5rem; align-items: center; flex-shrink: 0; }
+    .toolbar a, .toolbar button { font-size: .75rem; padding: .2rem .5rem; border-radius: 4px; text-decoration: none; border: 1px solid #30363d; background: transparent; color: #8b949e; cursor: pointer; white-space: nowrap; }
+    .toolbar a:hover, .toolbar button:hover { color: #c9d1d9; border-color: #8b949e; }
+    .toolbar .brand { color: #0dcaf0; font-weight: 700; letter-spacing: 2px; border: none; font-size: .85rem; }
+    .toolbar .active-page { color: #ffc107; border: none; font-size: .8rem; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar .note { font-size: .65rem; color: #238636; border: 1px solid #238636; padding: .15rem .4rem; border-radius: 3px; }
+    #browser-frame { flex: 1; border: none; width: 100%; background: #000; }
   </style>
 </head>
 <body>
 
-<nav class="navbar navbar-dark border-bottom border-secondary" style="flex-shrink:0">
-  <div class="container-fluid px-3 py-1">
-    <div class="d-flex align-items-center gap-3">
-      <a href="/" class="navbar-brand mb-0" style="font-size:.9rem">⬡ CyberSeed</a>
-      <a href="/" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">← Downloads</a>
-      <a href="/files" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.75rem">📁 Files</a>
-      <span class="text-warning" style="font-size:.8rem">🌐 Browser</span>
-    </div>
-    <div class="d-flex align-items-center gap-3">
-      <form method="POST" action="/logout" class="mb-0">
-        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">logout</button>
-      </form>
-    </div>
-  </div>
-</nav>
-
-<!-- Toolbar -->
 <div class="toolbar">
-  <button class="btn btn-outline-secondary" onclick="goBack()" title="Back">←</button>
-  <button class="btn btn-outline-secondary" onclick="goForward()" title="Forward">→</button>
-  <button class="btn btn-outline-secondary" onclick="reload()" title="Reload">↻</button>
-  <input type="text" class="url-bar" id="url-input" placeholder="Enter URL and press Enter…" 
-         value="https://noodlemagazine.com" autocomplete="off" spellcheck="false">
-  <button class="btn btn-outline-info" onclick="navigate()">Go</button>
-  <button class="btn btn-outline-success" onclick="downloadCurrent()" title="Send current page URL to download queue">⬇ Download</button>
+  <span class="brand">⬡ CyberSeed</span>
+  <a href="/">← Downloads</a>
+  <a href="/files">📁 Files</a>
+  <span class="active-page">🌐 Browser</span>
+  <span class="spacer"></span>
+  <span class="note">↓ Downloads auto-upload to OneDrive/WebDownloads</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit">logout</button>
+  </form>
 </div>
 
-<!-- Browser iframe -->
-<iframe id="browser-frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+<iframe id="browser-frame" allowfullscreen></iframe>
 
-<!-- Download bar -->
-<div class="download-bar" id="download-bar" style="display:none">
-  <span class="info" id="dl-info"></span>
-  <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('download-bar').style.display='none'">✕</button>
-</div>
-
-<!-- Toast -->
-<div class="toast-container">
-  <div id="toast" class="toast align-items-center border-0" role="alert">
-    <div class="d-flex">
-      <div class="toast-body" id="toast-body"></div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-    </div>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const urlInput = document.getElementById("url-input");
-const frame = document.getElementById("browser-frame");
-const dlBar = document.getElementById("download-bar");
-const dlInfo = document.getElementById("dl-info");
-
-let history = [];
-let historyIndex = -1;
-let currentUrl = "";
-
-// Navigate to URL
-function navigate(url) {
-  if (!url) url = urlInput.value.trim();
-  if (!url) return;
-  if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://" + url;
-  urlInput.value = url;
-  currentUrl = url;
-  frame.src = "/proxy?url=" + encodeURIComponent(url);
-  
-  // Update history
-  if (historyIndex < history.length - 1) {
-    history = history.slice(0, historyIndex + 1);
-  }
-  history.push(url);
-  historyIndex = history.length - 1;
-}
-
-function goBack() {
-  if (historyIndex > 0) {
-    historyIndex--;
-    const url = history[historyIndex];
-    urlInput.value = url;
-    currentUrl = url;
-    frame.src = "/proxy?url=" + encodeURIComponent(url);
-  }
-}
-
-function goForward() {
-  if (historyIndex < history.length - 1) {
-    historyIndex++;
-    const url = history[historyIndex];
-    urlInput.value = url;
-    currentUrl = url;
-    frame.src = "/proxy?url=" + encodeURIComponent(url);
-  }
-}
-
-function reload() {
-  if (currentUrl) {
-    frame.src = "/proxy?url=" + encodeURIComponent(currentUrl);
-  }
-}
-
-// Enter key in URL bar
-urlInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); navigate(); }
-});
-
-// Listen for postMessage from proxied pages (URL updates)
-window.addEventListener("message", (e) => {
-  if (e.data && e.data.proxyUrl) {
-    currentUrl = e.data.proxyUrl;
-    urlInput.value = currentUrl;
-    // Add to history if different from current
-    if (history[historyIndex] !== currentUrl) {
-      if (historyIndex < history.length - 1) {
-        history = history.slice(0, historyIndex + 1);
-      }
-      history.push(currentUrl);
-      historyIndex = history.length - 1;
-    }
-  }
-});
-
-// Download current URL
-async function downloadCurrent() {
-  if (!currentUrl) { showToast("No URL loaded", "warning"); return; }
-  
-  // Auto-detect source from URL
-  let source = "auto";
-  
-  try {
-    const r = await fetch("/api/submit", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        urls: currentUrl,
-        name: "",
-        format: "best",
-        source: source
-      })
-    });
-    const data = await r.json();
-    if (r.ok) {
-      showToast("✓ Queued: " + currentUrl, "success");
-      dlBar.style.display = "flex";
-      dlInfo.textContent = "Queued download: " + currentUrl;
-    } else {
-      showToast("✗ " + (data.error || "Failed"), "danger");
-    }
-  } catch(e) {
-    showToast("✗ " + e, "danger");
-  }
-}
-
-function showToast(msg, type) {
-  const t = document.getElementById("toast");
-  const tb = document.getElementById("toast-body");
-  tb.textContent = msg;
-  t.className = "toast align-items-center border-0 text-bg-" + (type || "info");
-  new bootstrap.Toast(t, {delay: 3000}).show();
-}
-
-// Auto-load default page
-navigate("https://noodlemagazine.com");
+// Full virtual Chromium browser on port 3456
+// Password-protected via KasmVNC built-in auth (same password as CyberSeed)
+const host = window.location.hostname;
+const proto = window.location.protocol;
+document.getElementById('browser-frame').src = proto + '//' + host + ':3456/';
 </script>
 </body>
 </html>
