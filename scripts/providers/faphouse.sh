@@ -3,17 +3,21 @@
 #  Provider: faphouse
 #  Handles: faphouse.com videos (requires authentication)
 #
-#  Uses a cookies.txt file exported from your local browser.
-#  To refresh: log in at faphouse.com locally, export via the
-#  'Get cookies.txt LOCALLY' extension, then scp to the server and
-#  docker cp into the qbt container at /config/cookies/faphouse-cookies.txt
+#  Uses CDP (Chrome DevTools Protocol) to intercept the real signed video URL
+#  from the browser container, then downloads it with yt-dlp.
+#
+#  Requirements:
+#    - cyber-seed-browser container running with remote debugging enabled
+#      (CHROMIUM_EXTRA_PARAMS in docker-compose.yml)
+#    - /config/cookies/faphouse-cookies.txt — export from browser via
+#      'Get cookies.txt LOCALLY' extension, re-export when session expires
 #
 #  Interface (called by download-url.sh):
 #    can_handle <url>   → exit 0 if this provider handles the URL
 #    download <url> <output_dir> <log_file>  → download into output_dir
 # ─────────────────────────────────────────────────────────────────────
 
-PROVIDER_NAME="faphouse (yt-dlp + cookies.txt)"
+PROVIDER_NAME="faphouse (yt-dlp + CDP)"
 COOKIES_FILE="/config/cookies/faphouse-cookies.txt"
 
 can_handle() {
@@ -77,15 +81,8 @@ download() {
     if [[ "$fmt" == "audio" ]]; then
         fmt_flags=(--format 'bestaudio/best' --extract-audio --audio-format mp3 --audio-quality 0)
     else
-        # Direct m3u8 URL — select the right HLS quality by height
-        case "$fmt" in
-            2160p) fmt_flags=(--format 'best[height<=2160]/best') ;;
-            1080p) fmt_flags=(--format 'best[height<=1080]/best') ;;
-            720p)  fmt_flags=(--format 'best[height<=720]/best')  ;;
-            480p)  fmt_flags=(--format 'best[height<=480]/best')  ;;
-            360p)  fmt_flags=(--format 'best[height<=360]/best')  ;;
-            *)     fmt_flags=(--format 'best')                    ;;
-        esac
+        # URL is already the right quality (direct mp4 or quality-specific m3u8)
+        fmt_flags=(--format 'best')
     fi
 
     yt-dlp \

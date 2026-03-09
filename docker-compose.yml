@@ -116,6 +116,8 @@ services:
       - TZ=${TZ:-UTC}
       - DISPLAY_WIDTH=1920
       - DISPLAY_HEIGHT=1080
+      # Enable Chrome DevTools Protocol so scripts can intercept network requests
+      - CHROMIUM_EXTRA_PARAMS=--remote-debugging-port=9222 --remote-debugging-address=0.0.0.0
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
