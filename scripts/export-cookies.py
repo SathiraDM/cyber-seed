@@ -92,7 +92,7 @@ def decrypt_v10(encrypted_value, key):
         padded = decryptor.update(ciphertext) + decryptor.finalize()
         # Remove PKCS7 padding
         pad_len = padded[-1]
-        return padded[:-pad_len].decode("utf-8", errors="replace")
+        return padded[:-pad_len].decode("utf-8", errors="ignore")
     except Exception as e:
         print(f"  Warning: decryption error: {e}")
         return ""
@@ -111,7 +111,7 @@ def decrypt_cookie_value(encrypted_value, raw_value, key):
         else:
             # Try raw UTF-8 decode (unencrypted or unknown format)
             try:
-                return encrypted_value.decode("utf-8", errors="replace")
+                return encrypted_value.decode("utf-8", errors="ignore")
             except Exception:
                 return ""
     return str(encrypted_value) if encrypted_value else raw_value or ""
