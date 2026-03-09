@@ -24,6 +24,18 @@
     .badge-failed  { background: #da3633 !important; }
     .badge-cancelled { background: #6e7681 !important; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    /* Source badges */
+    .src-youtube  { background: #ff0000 !important; color: #fff !important; }
+    .src-facebook { background: #1877f2 !important; color: #fff !important; }
+    .src-direct   { background: #3d444d !important; color: #c9d1d9 !important; }
+    .src-vimeo    { background: #19b7ea !important; color: #fff !important; }
+    .src-twitter  { background: #1d9bf0 !important; color: #fff !important; }
+    .src-instagram{ background: #c13584 !important; color: #fff !important; }
+    .src-tiktok   { background: #010101 !important; color: #fff !important; border: 1px solid #444 !important; }
+    .src-twitch   { background: #9146ff !important; color: #fff !important; }
+    /* Source pill in form */
+    #source-pill { transition: all .2s; }
+    #quality-wrap { transition: opacity .2s; }
     .job-row { cursor: pointer; transition: background .15s; }
     .job-row:hover { background: #21262d; }
     .job-row.active-row { background: #1c2128; border-left: 3px solid var(--accent); }
@@ -53,16 +65,19 @@
         <div class="card-body">
           <form id="url-submit-form">
             <div class="mb-3">
-              <label class="form-label small text-secondary">URL(s) <span class="text-muted">(one per line)</span></label>
+              <label class="form-label small text-secondary d-flex justify-content-between align-items-center">
+                <span>URL(s) <span class="text-muted">(one per line)</span></span>
+                <span id="source-pill" class="badge src-direct">direct</span>
+              </label>
               <textarea id="input-urls" class="form-control bg-dark text-light border-secondary" rows="5"
-                placeholder="https://youtube.com/watch?v=…&#10;https://example.com/file.zip myname"></textarea>
+                placeholder="https://youtube.com/watch?v=&#8230;&#10;https://facebook.com/watch?v=&#8230;&#10;https://example.com/file.zip myname"></textarea>
             </div>
             <div class="mb-3">
               <label class="form-label small text-secondary">Default name <span class="text-muted">(optional)</span></label>
               <input id="input-name" type="text" class="form-control bg-dark text-light border-secondary"
                 placeholder="e.g. my-video">
             </div>
-            <div class="mb-3">
+            <div class="mb-3" id="quality-wrap">
               <label class="form-label small text-secondary">Quality <span class="text-muted">(YouTube / yt-dlp)</span></label>
               <select id="input-format" class="form-select bg-dark text-light border-secondary">
                 <option value="best" selected>Best available (default)</option>
@@ -110,15 +125,16 @@
               <thead class="text-secondary">
                 <tr>
                   <th class="ps-3">ID</th>
+                  <th>Source</th>
                   <th>URL / Name</th>
-                  <th>Format</th>
+                  <th>Quality</th>
                   <th>Status</th>
                   <th>Started</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="job-tbody">
-                <tr><td colspan="5" class="text-center text-secondary py-4">No jobs yet</td></tr>
+                <tr><td colspan="7" class="text-center text-secondary py-4">No jobs yet</td></tr>
               </tbody>
             </table>
           </div>
@@ -146,7 +162,58 @@
 <script>
 let activeJobId = null;
 let activeEvtSrc = null;
-let refreshTimer = null;
+
+// ─ Source detection (mirrors app.py) ─────────────────
+const SOURCE_PATTERNS = [
+  { key: "youtube",   re: /youtube\.com|youtu\.be/i,               label: "▶ YouTube" },
+  { key: "facebook",  re: /facebook\.com|fb\.watch|fb\.com/i,      label: "⬛ Facebook" },
+  { key: "vimeo",     re: /vimeo\.com/i,                            label: "◉ Vimeo" },
+  { key: "twitter",   re: /twitter\.com|x\.com/i,                  label: "✕ X (Twitter)" },
+  { key: "instagram", re: /instagram\.com/i,                        label: "◈ Instagram" },
+  { key: "tiktok",    re: /tiktok\.com/i,                          label: "♪ TikTok" },
+  { key: "twitch",    re: /twitch\.tv/i,                           label: "◉ Twitch" },
+];
+
+const SOURCE_LABELS = {
+  youtube:   "▶ YouTube",
+  facebook:  "⬛ Facebook",
+  vimeo:     "◉ Vimeo",
+  twitter:   "✕ Twitter/X",
+  instagram: "◈ Instagram",
+  tiktok:    "♪ TikTok",
+  twitch:    "◉ Twitch",
+  direct:    "⬇ Direct",
+};
+
+function detectSource(url) {
+  for (const p of SOURCE_PATTERNS) {
+    if (p.re.test(url)) return p.key;
+  }
+  return "direct";
+}
+
+// direct links don't benefit from quality selection
+const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch"]);
+
+function updateFormForSource(src) {
+  const pill  = document.getElementById("source-pill");
+  const qwrap = document.getElementById("quality-wrap");
+  pill.className  = `badge src-${src}`;
+  pill.textContent = SOURCE_LABELS[src] || src;
+  if (QUALITY_SOURCES.has(src)) {
+    qwrap.style.opacity = "1";
+    qwrap.style.pointerEvents = "auto";
+  } else {
+    qwrap.style.opacity = "0.35";
+    qwrap.style.pointerEvents = "none";
+    document.getElementById("input-format").value = "best";
+  }
+}
+
+document.getElementById("input-urls").addEventListener("input", e => {
+  const firstUrl = e.target.value.trim().split("\n")[0].trim().split(/\s+/)[0];
+  updateFormForSource(firstUrl ? detectSource(firstUrl) : "direct");
+});
 
 // ─ Submit ────────────────────────────────────────────
 document.getElementById("url-submit-form").addEventListener("submit", async e => {
@@ -169,10 +236,13 @@ document.getElementById("url-submit-form").addEventListener("submit", async e =>
     });
     const data = await r.json();
     if (r.ok) {
-      msg.innerHTML = `<span class="text-info">✓ Submitted ${data.submitted} job(s)</span>`;
-      document.getElementById("input-urls").value = "";
-      document.getElementById("input-name").value = "";      document.getElementById("input-format").value = "best";      loadJobs();
-      if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
+        msg.innerHTML = `<span class="text-info">✓ Submitted ${data.submitted} job(s)</span>`;
+        document.getElementById("input-urls").value = "";
+        document.getElementById("input-name").value = "";
+        document.getElementById("input-format").value = "best";
+        updateFormForSource("direct");
+        loadJobs();
+        if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
     } else {
       msg.innerHTML = `<span class="text-danger">✗ ${data.error}</span>`;
     }
@@ -202,13 +272,17 @@ async function loadJobs() {
 function renderJobs(jobs) {
   const tbody = document.getElementById("job-tbody");
   if (!jobs.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary py-4">No jobs yet</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary py-4">No jobs yet</td></tr>`;
     return;
   }
   tbody.innerHTML = jobs.map(j => {
     const label    = j.name || j.url;
+    const src      = j.source || "direct";
+    const srcBadge = `<span class="badge src-${src}">${SOURCE_LABELS[src] || src}</span>`;
     const badge    = `<span class="badge badge-${j.status}">${j.status}</span>`;
-    const fmtLabel = j.format && j.format !== "best" ? `<span class="badge bg-secondary">${j.format}</span>` : `<span class="text-secondary" style="font-size:.7rem">best</span>`;
+    const fmtLabel = (j.format && j.format !== "best")
+      ? `<span class="badge bg-secondary">${j.format}</span>`
+      : `<span class="text-secondary" style="font-size:.7rem">best</span>`;
     const ts       = j.started_at ? j.started_at.replace("T"," ").slice(0,19) : "—";
     const cancel   = ["queued","running"].includes(j.status)
       ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="cancelJob('${j.id}',event)">✕</button>`
@@ -216,6 +290,7 @@ function renderJobs(jobs) {
     const active   = j.id === activeJobId ? "active-row" : "";
     return `<tr class="job-row ${active}" onclick="openLog('${j.id}','${escHtml(label)}')">
       <td class="ps-3 text-secondary">${j.id}</td>
+      <td>${srcBadge}</td>
       <td class="url-col" title="${escHtml(j.url)}">${escHtml(label)}</td>
       <td>${fmtLabel}</td>
       <td>${badge}</td>

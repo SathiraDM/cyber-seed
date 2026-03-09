@@ -8,7 +8,7 @@ Streams live progress via Server-Sent Events.
 import docker
 import json
 import os
-import queue
+import re
 import threading
 import time
 import uuid
@@ -113,11 +113,30 @@ def run_job(job: dict):
     upsert_job(job)
 
 
+# ── Source detection ─────────────────────────────────────────────────
+_SOURCE_PATTERNS = [
+    ("youtube",  r'(youtube\.com|youtu\.be)'),
+    ("facebook", r'(facebook\.com|fb\.watch|fb\.com)'),
+    ("vimeo",    r'vimeo\.com'),
+    ("twitter",  r'(twitter\.com|x\.com)'),
+    ("instagram",r'instagram\.com'),
+    ("tiktok",   r'tiktok\.com'),
+    ("twitch",   r'twitch\.tv'),
+]
+
+def detect_source(url: str) -> str:
+    for name, pattern in _SOURCE_PATTERNS:
+        if re.search(pattern, url, re.IGNORECASE):
+            return name
+    return "direct"
+
+
 def submit_job(url: str, name: str = "", fmt: str = "best") -> dict:
     job = {
         "id":         str(uuid.uuid4())[:8],
         "url":        url.strip(),
         "name":       name.strip(),
+        "source":     detect_source(url.strip()),
         "format":     fmt.strip() or "best",
         "status":     "queued",
         "started_at": datetime.utcnow().isoformat(),
