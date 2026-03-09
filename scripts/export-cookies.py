@@ -18,7 +18,7 @@ import shutil
 import sqlite3
 import struct
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── Config ────────────────────────────────────────────────────────────
 # Browser config is mounted read-only at /config/browser in qbt container.
@@ -186,7 +186,7 @@ def main():
 
     with open(OUTPUT_FILE, "w") as f:
         f.write("# Netscape HTTP Cookie File\n")
-        f.write(f"# Exported by CyberSeed on {datetime.utcnow().isoformat()}Z\n")
+        f.write(f"# Exported by CyberSeed on {datetime.now(timezone.utc).isoformat()}Z\n")
         f.write(f"# Source: {db_path}\n\n")
 
         exported = 0
