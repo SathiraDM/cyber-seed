@@ -49,31 +49,50 @@ download() {
     local clean_url="${url%%#*}"
     echo "[faphouse] Page URL: $clean_url"
 
-    local -a fmt_flags
+    # Map YT_FORMAT to a quality number for find-video-url.py
+    local quality
     case "$fmt" in
-        2160p) fmt_flags=(--format 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' --merge-output-format mp4) ;;
-        1080p) fmt_flags=(--format 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best' --merge-output-format mp4) ;;
-        720p)  fmt_flags=(--format 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best'   --merge-output-format mp4) ;;
-        480p)  fmt_flags=(--format 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best'   --merge-output-format mp4) ;;
-        360p)  fmt_flags=(--format 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best'   --merge-output-format mp4) ;;
-        audio) fmt_flags=(--format 'bestaudio/best' --extract-audio --audio-format mp3 --audio-quality 0) ;;
-        *)     fmt_flags=(--format 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best' --merge-output-format mp4) ;;
+        2160p) quality="2160" ;;
+        1080p) quality="1080" ;;
+        720p)  quality="720"  ;;
+        480p)  quality="480"  ;;
+        360p)  quality="360"  ;;
+        *)     quality="1080" ;;  # best/default
     esac
+
+    # Use find-video-url.py to get the direct signed video URL
+    echo "[faphouse] Extracting direct video URL (quality=${quality}p)..."
+    local video_url
+    video_url=$(python3 /scripts/find-video-url.py "$clean_url" "$quality" 2>/dev/null)
+    local find_exit=$?
+
+    if [[ $find_exit -ne 0 || -z "$video_url" ]]; then
+        echo "[faphouse] WARNING: Could not get direct URL, falling back to page URL..."
+        video_url="$clean_url"
+    else
+        echo "[faphouse] Direct video URL: $video_url"
+    fi
+
+    # For audio-only format, still use yt-dlp format selection
+    local -a fmt_flags
+    if [[ "$fmt" == "audio" ]]; then
+        fmt_flags=(--format 'bestaudio/best' --extract-audio --audio-format mp3 --audio-quality 0)
+    else
+        # Direct MP4/m3u8 URL — let yt-dlp pick best available from the direct link
+        fmt_flags=(--format 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best' --merge-output-format mp4)
+    fi
 
     yt-dlp \
         --output "$output_dir/%(title)s.%(ext)s" \
         "${fmt_flags[@]}" \
-        --cookies-from-browser "chromium:$BROWSER_PROFILE" \
-        --match-filter "duration>60" \
         --trim-filenames 200 \
-        --no-playlist \
         --retries 5 \
         --fragment-retries 5 \
         --concurrent-fragments 4 \
         --newline \
         --progress \
         --add-header "Referer:https://faphouse.com" \
-        "$clean_url" 2>&1
+        "$video_url" 2>&1
 
     local exit_code=$?
     if [[ $exit_code -eq 0 ]]; then
