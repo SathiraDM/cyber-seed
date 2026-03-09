@@ -88,10 +88,10 @@ upload_to_onedrive() {
     local local_path="$1"
     local name="$2"
 
-    log "Uploading → ${REMOTE}:${REMOTE_PATH}/${name}"
+    log "Uploading → ${REMOTE}:${REMOTE_PATH}/"
 
     rclone copy "$local_path" \
-        "${REMOTE}:${REMOTE_PATH}/${name}" \
+        "${REMOTE}:${REMOTE_PATH}" \
         --config "$RCLONE_CONF" \
         --exclude '*.json' \
         --exclude '*.webp' \
@@ -193,7 +193,7 @@ print(name[:100] or 'download')
     local up_exit=$?
 
     if [[ $up_exit -eq 0 ]]; then
-        log "UPLOAD SUCCESS: $output_name → ${REMOTE}:${REMOTE_PATH}/${output_name}"
+        log "UPLOAD SUCCESS: $output_name → ${REMOTE}:${REMOTE_PATH}/"
     else
         log "UPLOAD FAILED: $output_name (rclone exit $up_exit)"
     fi
