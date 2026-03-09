@@ -6,6 +6,8 @@ Streams live progress via Server-Sent Events.
 """
 
 import docker
+import functools
+import hashlib
 import json
 import os
 import re
@@ -15,7 +17,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+from flask import (Flask, Response, jsonify, redirect, render_template,
+                   request, session, stream_with_context, url_for)
 
 app = Flask(__name__)
 
@@ -23,7 +26,21 @@ app = Flask(__name__)
 JOBS_DIR       = Path("/logs/jobs")
 JOBS_INDEX     = Path("/logs/jobs/index.json")
 QBT_CONTAINER  = os.environ.get("QBT_CONTAINER", "cyber-seed-qbt")
+WEBUI_PASS     = os.environ.get("QBT_WEBUI_PASS", "")
+# Derive a stable secret from the password so sessions survive restarts
+app.secret_key = hashlib.sha256(f"cyber-seed:{WEBUI_PASS}".encode()).hexdigest()
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Auth ──────────────────────────────────────────────────────────────
+def login_required(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
 
 # ── Docker client ─────────────────────────────────────────────────────
 try:
@@ -154,15 +171,37 @@ def submit_job(url: str, name: str = "", fmt: str = "best", source_override: str
 
 # ── HTTP routes ───────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET"])
+def login_page():
+    if session.get("logged_in"):
+        return redirect(url_for("index"))
+    return render_template("login.html", error=None)
+
+@app.route("/login", methods=["POST"])
+def login_post():
+    pw = request.form.get("password", "")
+    if WEBUI_PASS and pw == WEBUI_PASS:
+        session["logged_in"] = True
+        return redirect(url_for("index"))
+    return render_template("login.html", error="Wrong password.")
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 @app.route("/api/jobs")
+@login_required
 def api_jobs():
     return jsonify(all_jobs())
 
 @app.route("/api/submit", methods=["POST"])
+@login_required
 def api_submit():
     data = request.get_json(force=True) or {}
     urls_raw  = data.get("urls", "")
@@ -184,6 +223,7 @@ def api_submit():
     return jsonify({"submitted": len(jobs), "jobs": jobs})
 
 @app.route("/api/jobs/<job_id>/cancel", methods=["POST"])
+@login_required
 def api_cancel(job_id):
     job = get_job(job_id)
     if not job:
@@ -196,6 +236,7 @@ def api_cancel(job_id):
     return jsonify(job)
 
 @app.route("/api/jobs/<job_id>/log")
+@login_required
 def api_log_stream(job_id):
     """Server-Sent Events: stream job log file live."""
     log_path = JOBS_DIR / f"{job_id}.log"
@@ -228,11 +269,45 @@ def api_log_stream(job_id):
     )
 
 @app.route("/api/jobs/<job_id>/log/full")
+@login_required
 def api_log_full(job_id):
     log_path = JOBS_DIR / f"{job_id}.log"
     if not log_path.exists():
         return "No log yet.", 404
     return log_path.read_text(), 200, {"Content-Type": "text/plain"}
+
+@app.route("/api/jobs/<job_id>", methods=["DELETE"])
+@login_required
+def api_delete_job(job_id):
+    with _jobs_lock:
+        jobs = load_jobs()
+        if job_id not in jobs:
+            return jsonify({"error": "Not found"}), 404
+        del jobs[job_id]
+        save_jobs(jobs)
+    log_path = JOBS_DIR / f"{job_id}.log"
+    if log_path.exists():
+        log_path.unlink()
+    return jsonify({"deleted": job_id})
+
+@app.route("/api/jobs", methods=["DELETE"])
+@login_required
+def api_clear_jobs():
+    mode = request.args.get("mode", "finished")  # finished | all
+    with _jobs_lock:
+        jobs = load_jobs()
+        if mode == "all":
+            to_delete = list(jobs.keys())
+        else:
+            to_delete = [jid for jid, j in jobs.items()
+                         if j.get("status") in ("done", "failed", "cancelled")]
+        for jid in to_delete:
+            del jobs[jid]
+            log_path = JOBS_DIR / f"{jid}.log"
+            if log_path.exists():
+                log_path.unlink()
+        save_jobs(jobs)
+    return jsonify({"deleted": len(to_delete)})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8888, threaded=True)

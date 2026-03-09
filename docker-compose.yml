@@ -84,6 +84,7 @@ services:
     restart: unless-stopped
     environment:
       - QBT_CONTAINER=cyber-seed-qbt
+      - QBT_WEBUI_PASS=${QBT_WEBUI_PASS:-}
       - TZ=${TZ:-UTC}
     volumes:
       # Docker socket to run exec in sibling containers
