@@ -107,9 +107,11 @@ def run_job(job: dict):
         env = {"YT_FORMAT": fmt}
         if forced_src and forced_src not in ("auto", ""):
             env["FORCE_PROVIDER"] = forced_src
+        # Convert env dict to list of KEY=VALUE strings for low-level API
+        env_list = [f"{k}={v}" for k, v in env.items()]
         # Use low-level API for proper streaming + exit code
         exec_id = docker_client.api.exec_create(
-            container.id, cmd, environment=env,
+            container.id, cmd, environment=env_list,
         )["Id"]
         stream = docker_client.api.exec_start(exec_id, stream=True)
 

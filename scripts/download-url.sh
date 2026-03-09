@@ -103,10 +103,10 @@ upload_to_onedrive() {
         --low-level-retries=10 \
         --stats=5s \
         --stats-one-line \
-        --progress \
-        --verbose 2>&1 | tee -a "$LOG_FILE"
+        --verbose \
+        --use-json-log 2>&1
 
-    return ${PIPESTATUS[0]}
+    return $?
 }
 
 # ── Process a single URL ──────────────────────────────────────────────
