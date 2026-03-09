@@ -64,9 +64,10 @@ def extract_url_from_page(html: str, target_quality: str | None = None) -> str |
     """Parse data-el-formats or data-el-hls-url from the page HTML."""
 
     # Strategy 1: data-el-formats — direct signed MP4 URLs per quality
-    m = re.search(r'data-el-formats=["\']([^"\']+)["\']', html)
+    # Attribute value may be quoted ("..." or '...') or unquoted ({...})
+    m = re.search(r'data-el-formats=(?:["\']([^"\']+)["\']|(\{[^>\s]+\}))', html)
     if m:
-        raw = html_mod.unescape(m.group(1))
+        raw = html_mod.unescape(m.group(1) or m.group(2))
         try:
             formats = json.loads(raw)
             print(f"[find-video] data-el-formats keys: {list(formats.keys())}", file=sys.stderr)
