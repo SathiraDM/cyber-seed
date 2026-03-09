@@ -6,15 +6,21 @@
   <title>CyberSeed — Browser</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code','Fira Code',monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code','Fira Code',monospace; display: flex; flex-direction: column; height: 100vh; }
     .toolbar { background: #161b22; border-bottom: 1px solid #30363d; padding: .35rem .8rem; display: flex; gap: .5rem; align-items: center; flex-shrink: 0; }
     .toolbar a, .toolbar button { font-size: .75rem; padding: .2rem .5rem; border-radius: 4px; text-decoration: none; border: 1px solid #30363d; background: transparent; color: #8b949e; cursor: pointer; white-space: nowrap; }
     .toolbar a:hover, .toolbar button:hover { color: #c9d1d9; border-color: #8b949e; }
     .toolbar .brand { color: #0dcaf0; font-weight: 700; letter-spacing: 2px; border: none; font-size: .85rem; }
     .toolbar .active-page { color: #ffc107; border: none; font-size: .8rem; }
     .toolbar .spacer { flex: 1; }
-    .toolbar .note { font-size: .65rem; color: #238636; border: 1px solid #238636; padding: .15rem .4rem; border-radius: 3px; }
-    #browser-frame { flex: 1; border: none; width: 100%; background: #000; }
+    .main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 2rem; }
+    .launch-btn { background: #238636; color: #fff; border: none; padding: 1rem 2.5rem; border-radius: 8px; font-size: 1.1rem; font-family: inherit; cursor: pointer; letter-spacing: 1px; transition: background .2s; display: flex; align-items: center; gap: .6rem; }
+    .launch-btn:hover { background: #2ea043; }
+    .info-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.2rem 1.5rem; max-width: 500px; width: 100%; }
+    .info-card h3 { font-size: .85rem; color: #0dcaf0; margin-bottom: .6rem; }
+    .info-card p { font-size: .75rem; color: #8b949e; line-height: 1.6; margin: .3rem 0; }
+    .info-card .highlight { color: #ffc107; }
+    .info-card code { background: #21262d; padding: .15rem .4rem; border-radius: 3px; font-size: .72rem; color: #c9d1d9; }
   </style>
 </head>
 <body>
@@ -25,19 +31,30 @@
   <a href="/files">📁 Files</a>
   <span class="active-page">🌐 Browser</span>
   <span class="spacer"></span>
-  <span class="note">↓ Downloads auto-upload to OneDrive/WebDownloads</span>
   <form method="POST" action="/logout" style="display:inline">
     <button type="submit">logout</button>
   </form>
 </div>
 
-<iframe id="browser-frame" allowfullscreen></iframe>
+<div class="main">
+  <button class="launch-btn" onclick="openBrowser()">
+    🌐 Launch Virtual Browser
+  </button>
+
+  <div class="info-card">
+    <h3>Virtual Browser (Chromium)</h3>
+    <p>Opens a full Chromium browser in a new tab via KasmVNC.</p>
+    <p>🔐 <span class="highlight">Login:</span> username <code>admin</code>, same password as CyberSeed</p>
+    <p>⚠️ You'll see a <span class="highlight">self-signed certificate warning</span> on first visit — click <strong>Advanced → Proceed</strong> to continue.</p>
+    <p>📥 Downloads in the browser auto-upload to <span class="highlight">OneDrive/WebDownloads</span>.</p>
+  </div>
+</div>
 
 <script>
-// Full virtual Chromium browser on port 3456
-// KasmVNC requires HTTPS — always use https:// regardless of parent protocol
-const host = window.location.hostname;
-document.getElementById('browser-frame').src = 'https://' + host + ':3456/';
+function openBrowser() {
+  const host = window.location.hostname;
+  window.open('https://' + host + ':3456/', '_blank');
+}
 </script>
 </body>
 </html>
