@@ -33,6 +33,7 @@
     .src-instagram{ background: #c13584 !important; color: #fff !important; }
     .src-tiktok   { background: #010101 !important; color: #fff !important; border: 1px solid #444 !important; }
     .src-twitch   { background: #9146ff !important; color: #fff !important; }
+    .src-auto     { background: #21262d !important; color: #8b949e !important; border: 1px solid #30363d !important; }
     /* Source pill in form */
     #source-pill { transition: all .2s; }
     #quality-wrap { transition: opacity .2s; }
@@ -67,10 +68,24 @@
             <div class="mb-3">
               <label class="form-label small text-secondary d-flex justify-content-between align-items-center">
                 <span>URL(s) <span class="text-muted">(one per line)</span></span>
-                <span id="source-pill" class="badge src-direct">direct</span>
+                <span id="source-pill" class="badge src-auto">auto-detect</span>
               </label>
               <textarea id="input-urls" class="form-control bg-dark text-light border-secondary" rows="5"
                 placeholder="https://youtube.com/watch?v=&#8230;&#10;https://facebook.com/watch?v=&#8230;&#10;https://example.com/file.zip myname"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-secondary">Source <span class="text-muted">(provider to use)</span></label>
+              <select id="input-source" class="form-select bg-dark text-light border-secondary">
+                <option value="auto" selected>&#128269; Auto-detect from URL</option>
+                <option value="youtube">&#9654; YouTube (yt-dlp)</option>
+                <option value="facebook">&#11035; Facebook (yt-dlp)</option>
+                <option value="vimeo">&#9673; Vimeo (yt-dlp)</option>
+                <option value="twitter">&#10005; Twitter / X (yt-dlp)</option>
+                <option value="instagram">&#9672; Instagram (yt-dlp)</option>
+                <option value="tiktok">&#9834; TikTok (yt-dlp)</option>
+                <option value="twitch">&#9673; Twitch (yt-dlp)</option>
+                <option value="direct">&#11015; Direct link (aria2c)</option>
+              </select>
             </div>
             <div class="mb-3">
               <label class="form-label small text-secondary">Default name <span class="text-muted">(optional)</span></label>
@@ -198,29 +213,41 @@ const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagr
 function updateFormForSource(src) {
   const pill  = document.getElementById("source-pill");
   const qwrap = document.getElementById("quality-wrap");
-  pill.className  = `badge src-${src}`;
-  pill.textContent = SOURCE_LABELS[src] || src;
-  if (QUALITY_SOURCES.has(src)) {
-    qwrap.style.opacity = "1";
-    qwrap.style.pointerEvents = "auto";
-  } else {
-    qwrap.style.opacity = "0.35";
-    qwrap.style.pointerEvents = "none";
-    document.getElementById("input-format").value = "best";
-  }
+  const effectiveSrc = src === "auto" ? "auto" : src;
+  pill.className   = `badge src-${effectiveSrc}`;
+  pill.textContent = effectiveSrc === "auto" ? "auto-detect" : (SOURCE_LABELS[effectiveSrc] || effectiveSrc);
+  const isVideo = QUALITY_SOURCES.has(src);
+  qwrap.style.opacity      = isVideo ? "1" : "0.35";
+  qwrap.style.pointerEvents = isVideo ? "auto" : "none";
+  if (!isVideo) document.getElementById("input-format").value = "best";
 }
 
+// source select drives the quality hint too
+document.getElementById("input-source").addEventListener("change", e => {
+  const src = e.target.value;
+  if (src === "auto") {
+    // re-derive from URL
+    const firstUrl = document.getElementById("input-urls").value.trim().split("\n")[0].trim().split(/\s+/)[0];
+    updateFormForSource(firstUrl ? detectSource(firstUrl) : "auto");
+  } else {
+    updateFormForSource(src);
+  }
+});
+
 document.getElementById("input-urls").addEventListener("input", e => {
+  // only update the pill if source dropdown is on auto
+  if (document.getElementById("input-source").value !== "auto") return;
   const firstUrl = e.target.value.trim().split("\n")[0].trim().split(/\s+/)[0];
-  updateFormForSource(firstUrl ? detectSource(firstUrl) : "direct");
+  updateFormForSource(firstUrl ? detectSource(firstUrl) : "auto");
 });
 
 // ─ Submit ────────────────────────────────────────────
 document.getElementById("url-submit-form").addEventListener("submit", async e => {
   e.preventDefault();
-  const urls = document.getElementById("input-urls").value.trim();
-  const name = document.getElementById("input-name").value.trim();
+  const urls   = document.getElementById("input-urls").value.trim();
+  const name   = document.getElementById("input-name").value.trim();
   const format = document.getElementById("input-format").value;
+  const source = document.getElementById("input-source").value;
   if (!urls) return;
 
   const spinner = document.getElementById("submit-spinner");
@@ -232,7 +259,7 @@ document.getElementById("url-submit-form").addEventListener("submit", async e =>
     const r = await fetch("/api/submit", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ urls, name, format })
+      body: JSON.stringify({ urls, name, format, source })
     });
     const data = await r.json();
     if (r.ok) {
@@ -240,7 +267,8 @@ document.getElementById("url-submit-form").addEventListener("submit", async e =>
         document.getElementById("input-urls").value = "";
         document.getElementById("input-name").value = "";
         document.getElementById("input-format").value = "best";
-        updateFormForSource("direct");
+        document.getElementById("input-source").value = "auto";
+        updateFormForSource("auto");
         loadJobs();
         if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
     } else {

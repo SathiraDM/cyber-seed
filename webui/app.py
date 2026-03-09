@@ -85,11 +85,15 @@ def run_job(job: dict):
             cmd.append(name)
 
         fmt = job.get("format", "best")
+        forced_src = job.get("source", "auto")
+        env = {"YT_FORMAT": fmt}
+        if forced_src and forced_src not in ("auto", ""):
+            env["FORCE_PROVIDER"] = forced_src
         exit_code, output = container.exec_run(
             cmd,
             stream=False,
             demux=False,
-            environment={"YT_FORMAT": fmt},
+            environment=env,
         )
         output_text = output.decode("utf-8", errors="replace") if output else ""
         with open(log_path, "a") as f:
@@ -131,12 +135,13 @@ def detect_source(url: str) -> str:
     return "direct"
 
 
-def submit_job(url: str, name: str = "", fmt: str = "best") -> dict:
+def submit_job(url: str, name: str = "", fmt: str = "best", source_override: str = "auto") -> dict:
+    detected = detect_source(url.strip())
     job = {
         "id":         str(uuid.uuid4())[:8],
         "url":        url.strip(),
         "name":       name.strip(),
-        "source":     detect_source(url.strip()),
+        "source":     detected if source_override in ("auto", "") else source_override,
         "format":     fmt.strip() or "best",
         "status":     "queued",
         "started_at": datetime.utcnow().isoformat(),
@@ -163,17 +168,18 @@ def api_submit():
     urls_raw  = data.get("urls", "")
     name      = data.get("name", "")
 
-    fmt   = data.get("format", "best")
+    fmt    = data.get("format", "best")
+    source = data.get("source", "auto")
     lines = [l.strip() for l in urls_raw.splitlines() if l.strip() and not l.startswith("#")]
     if not lines:
         return jsonify({"error": "No URLs provided"}), 400
 
     jobs = []
     for line in lines:
-        parts   = line.split(None, 1)
-        url     = parts[0]
-        n       = parts[1] if len(parts) > 1 else name
-        jobs.append(submit_job(url, n, fmt))
+        parts = line.split(None, 1)
+        url   = parts[0]
+        n     = parts[1] if len(parts) > 1 else name
+        jobs.append(submit_job(url, n, fmt, source))
 
     return jsonify({"submitted": len(jobs), "jobs": jobs})
 

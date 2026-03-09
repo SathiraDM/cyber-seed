@@ -64,6 +64,16 @@ done
 # ── Find provider for a URL ───────────────────────────────────────────
 find_provider() {
     local url="$1"
+    # Honour manual override — FORCE_PROVIDER=youtube/facebook/direct/etc.
+    if [[ -n "${FORCE_PROVIDER:-}" ]]; then
+        local forced="$PROVIDERS_DIR/${FORCE_PROVIDER}.sh"
+        if [[ -f "$forced" ]]; then
+            echo "$forced"
+            return 0
+        else
+            log "WARNING: FORCE_PROVIDER='${FORCE_PROVIDER}' not found at $forced, falling back to auto-detect"
+        fi
+    fi
     for provider_file in "${PROVIDER_FILES[@]}"; do
         (
             source "$provider_file"
