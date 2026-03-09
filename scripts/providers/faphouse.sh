@@ -3,21 +3,19 @@
 #  Provider: faphouse
 #  Handles: faphouse.com videos (requires authentication)
 #
-#  Uses CDP (Chrome DevTools Protocol) to intercept the real signed video URL
-#  from the browser container, then downloads it with yt-dlp.
+#  Fetches the video page with session cookies, parses the signed CDN URL
+#  from the data-el-formats attribute in the HTML, then downloads with yt-dlp.
 #
 #  Requirements:
-#    - cyber-seed-browser container running with remote debugging enabled
-#      (CHROMIUM_EXTRA_PARAMS in docker-compose.yml)
 #    - /config/cookies/faphouse-cookies.txt — export from browser via
-#      'Get cookies.txt LOCALLY' extension, re-export when session expires
+#      'Get cookies.txt LOCALLY' extension, re-export when session expires (~90 days)
 #
 #  Interface (called by download-url.sh):
 #    can_handle <url>   → exit 0 if this provider handles the URL
 #    download <url> <output_dir> <log_file>  → download into output_dir
 # ─────────────────────────────────────────────────────────────────────
 
-PROVIDER_NAME="faphouse (yt-dlp + CDP)"
+PROVIDER_NAME="faphouse (yt-dlp + cookies)"
 COOKIES_FILE="/config/cookies/faphouse-cookies.txt"
 
 can_handle() {
