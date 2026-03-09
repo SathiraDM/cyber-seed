@@ -122,6 +122,7 @@ services:
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
+      - ./extension:/opt/cyberseed-extension:ro
     ports:
       - "${BROWSER_PORT:-3456}:5800"
     shm_size: "1gb"
