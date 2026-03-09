@@ -32,7 +32,7 @@ def _decrypt_chromium_linux(encrypted_value: bytes) -> str:
     """Decrypt a Chromium v10/v11 cookie value on Linux using the 'peanuts' key."""
     try:
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-        from cryptography.hazmat.primitives import hashes, padding
+        from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         from cryptography.hazmat.backends import default_backend
     except ImportError:
@@ -41,7 +41,6 @@ def _decrypt_chromium_linux(encrypted_value: bytes) -> str:
     if not encrypted_value.startswith((b"v10", b"v11")):
         return encrypted_value.decode("utf-8", errors="ignore")
 
-    # Derive 128-bit AES key from password "peanuts"
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA1(),
         length=16,
@@ -51,21 +50,37 @@ def _decrypt_chromium_linux(encrypted_value: bytes) -> str:
     )
     key = kdf.derive(b"peanuts")
 
-    iv = b" " * 16
-    ciphertext = encrypted_value[3:]  # strip b"v10" / b"v11"
+    payload = encrypted_value[3:]  # strip b"v10" / b"v11"
 
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    decryptor = cipher.decryptor()
-    decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+    def _aes_cbc_decrypt(key, iv, ciphertext):
+        from cryptography.hazmat.primitives.padding import PKCS7
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted = decryptor.update(ciphertext) + decryptor.finalize()
+        try:
+            unpadder = PKCS7(128).unpadder()
+            return unpadder.update(decrypted) + unpadder.finalize()
+        except Exception:
+            return decrypted.rstrip(b"\x00")
 
-    # Remove PKCS7 padding
-    try:
-        unpadder = padding.PKCS7(128).unpadder()
-        decrypted = unpadder.update(decrypted) + unpadder.finalize()
-    except Exception:
-        decrypted = decrypted.rstrip(b"\x00").rstrip(b"\x08").rstrip(b"\x0f")
+    # Try 1: embedded IV (first 16 bytes are the IV — used by some Linux builds)
+    if len(payload) > 16:
+        iv_embedded = payload[:16]
+        ciphertext = payload[16:]
+        if len(ciphertext) % 16 == 0:
+            result = _aes_cbc_decrypt(key, iv_embedded, ciphertext)
+            decoded = result.decode("utf-8", errors="replace")
+            if "\ufffd" not in decoded and decoded.isprintable():
+                return decoded
 
-    return decrypted.decode("utf-8", errors="ignore")
+    # Try 2: static IV (16 spaces — standard Linux Chromium)
+    if len(payload) % 16 == 0:
+        iv_static = b" " * 16
+        result = _aes_cbc_decrypt(key, iv_static, payload)
+        decoded = result.decode("utf-8", errors="replace")
+        return decoded
+
+    return ""
 
 
 def get_cookies(domain_filter):
