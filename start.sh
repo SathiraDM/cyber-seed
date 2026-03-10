@@ -13,6 +13,20 @@ echo -e "${CYAN}[cyber-seed]${NC} Starting stack ..."
 [[ ! -f ".env" ]] && echo -e "${YELLOW}[WARN]${NC} .env not found. Run ./setup.sh first." && exit 1
 [[ ! -f "config/rclone/rclone.conf" ]] && echo -e "${YELLOW}[WARN]${NC} rclone.conf not found. Run ./setup.sh first." && exit 1
 
+# Auto-generate extension/credentials.json from .env so the Chrome extension
+# can auto-configure its API key without manual setup in the Options page.
+_API_KEY=$(grep '^QBT_WEBUI_PASS=' .env | cut -d= -f2-)
+_DL_PORT=$(grep '^DOWNLOADER_PORT=' .env | cut -d= -f2-)
+_DL_PORT=${_DL_PORT:-8888}
+_HOST_IP=$(curl -sf --max-time 3 http://checkip.amazonaws.com 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+cat > extension/credentials.json <<EOF
+{
+  "apiBase": "http://${_HOST_IP}:${_DL_PORT}",
+  "apiKey": "${_API_KEY}"
+}
+EOF
+echo -e "${CYAN}[cyber-seed]${NC} Extension credentials written to extension/credentials.json"
+
 # Build the custom image (only rebuilds if Dockerfile changed)
 docker compose build --quiet
 

@@ -1,6 +1,9 @@
 # Environment — contains credentials, never commit
 .env
 
+# Extension credentials — generated from .env by start.sh, never commit
+extension/credentials.json
+
 # rclone config — contains OAuth tokens (keep the dir, not the secrets)
 config/rclone/*
 !config/rclone/.gitkeep

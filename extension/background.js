@@ -19,6 +19,26 @@ async function loadConfig() {
   const data = await chrome.storage.local.get(['apiBase', 'apiKey']);
   API_BASE = data.apiBase || DEFAULT_API_BASE;
   API_KEY  = data.apiKey  || '';
+
+  // If API key not yet configured, try loading from credentials.json mounted
+  // at runtime via docker-compose (NOT committed to git — gitignored file).
+  if (!API_KEY) {
+    try {
+      const resp = await fetch(chrome.runtime.getURL('credentials.json'));
+      if (resp.ok) {
+        const creds = await resp.json();
+        API_BASE = creds.apiBase || API_BASE;
+        API_KEY  = creds.apiKey  || '';
+        // Persist into storage so it survives extension reloads
+        if (API_KEY) {
+          await chrome.storage.local.set({ apiBase: API_BASE, apiKey: API_KEY });
+          console.log('[cyberseed] Loaded credentials from credentials.json');
+        }
+      }
+    } catch (_) {
+      // credentials.json not present — configure via Options page instead
+    }
+  }
 }
 
 // ── API helpers ──────────────────────────────────────────────────────

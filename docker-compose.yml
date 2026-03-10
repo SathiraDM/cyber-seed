@@ -153,6 +153,8 @@ services:
       - ${DOWNLOADS_PATH:-./downloads}:/downloads
       - ./config/browser:/config
       - ./extension:/opt/cyberseed-extension:ro
+      # Override default params to auto-load the CyberSeed extension
+      - ./browser-config/params:/etc/services.d/app/params:ro
     ports:
       - "${BROWSER_PORT:-3456}:5800"
     shm_size: "1gb"
