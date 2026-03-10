@@ -107,18 +107,16 @@ services:
     image: filebrowser/filebrowser:latest
     container_name: cyber-seed-files
     restart: unless-stopped
-    environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+    user: "0:0"
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/srv
-      - ./config/filebrowser:/config
+      - filebrowser_data:/database
     ports:
       - "${FILEBROWSER_PORT:-8334}:80"
     command: >
       --noauth
       --root=/srv
-      --database=/config/filebrowser.db
+      --database=/database/filebrowser.db
 
   # ── Virtual Browser (Chromium) ──────────────────────────────────────
   # Full Chromium browser via noVNC — browse manually & use Video DownloadHelper
@@ -145,3 +143,6 @@ services:
     ports:
       - "${BROWSER_PORT:-3456}:5800"
     shm_size: "1gb"
+
+volumes:
+  filebrowser_data:

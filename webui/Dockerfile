@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir flask docker requests beautifulsoup4
 
-COPY app.py .
+COPY app.py db.py ./
 COPY templates/ templates/
 
 EXPOSE 8888
