@@ -77,8 +77,8 @@ async function processItem(item) {
   // Wait for tab to finish loading
   await waitForTabLoad(tab.id);
 
-  // Small extra delay for JS to populate data attributes
-  await sleep(3000);
+  // Small extra delay for JS/SPA to populate data attributes
+  await sleep(8000);
 
   // Ask content script to extract video data
   let result;
@@ -119,6 +119,7 @@ async function processItem(item) {
       published:  result.published || '',
       is_trailer: result.isTrailer || false,
       source_url: item.url,
+      debug_dump: result.debugDump || {},
     }),
   });
 
@@ -167,6 +168,22 @@ function extractVideoData() {
     const meta = { title, models, studio, tags, duration, views, published };
 
     // ── Video URL ──────────────────────────────────────────────────────
+    // Dump all data-el-* attributes and video src for debugging
+    const debugDump = {};
+    document.querySelectorAll('[data-el-formats],[data-el-hls],[data-el-src],[data-el-url],[data-el-stream],[data-src],[data-url],[data-hls]').forEach(el => {
+      for (const attr of el.attributes) {
+        if (attr.name.startsWith('data-')) {
+          debugDump[attr.name] = attr.value.slice(0, 300);
+        }
+      }
+    });
+    const videoEl = document.querySelector('video');
+    if (videoEl) {
+      debugDump['video.currentSrc'] = videoEl.currentSrc?.slice(0, 300) || '';
+      debugDump['video.src'] = videoEl.src?.slice(0, 300) || '';
+      videoEl.querySelectorAll('source').forEach((s, i) => { debugDump[`source[${i}].src`] = s.src?.slice(0, 300) || ''; });
+    }
+
     const el = document.querySelector('[data-el-formats]');
     if (el) {
       const formatsRaw = el.getAttribute('data-el-formats');
@@ -201,6 +218,7 @@ function extractVideoData() {
             cdnUrl:    best.url,
             quality:   best.label || 'unknown',
             isTrailer: fullFormats.length === 0,
+            debugDump,
             ...meta,
           };
         }
@@ -208,17 +226,18 @@ function extractVideoData() {
     }
 
     // Fallback: live <video> src
-    const videoTag = document.querySelector('video');
-    if (videoTag) {
-      const src = videoTag.currentSrc || videoTag.src ||
-                  videoTag.querySelector('source')?.src;
+    const videoTag2 = document.querySelector('video');
+    if (videoTag2) {
+      const src = videoTag2.currentSrc || videoTag2.src ||
+                  videoTag2.querySelector('source')?.src;
       if (src?.startsWith('http')) {
-        return { cdnUrl: src, quality: 'auto', isTrailer: src.includes('/trailer/'), ...meta };
+        return { cdnUrl: src, quality: 'auto', isTrailer: src.includes('/trailer/'), debugDump, ...meta };
       }
     }
 
     return {
       error: 'No video URL found — make sure you are logged in with a premium faphouse account',
+      debugDump,
       ...meta,
     };
   } catch (e) {

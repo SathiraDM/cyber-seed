@@ -538,6 +538,8 @@ def fh_resolve():
     is_trailer = data.get("is_trailer", False)
     source_url = data.get("source_url", "")
 
+    debug_dump  = data.get("debug_dump", {})
+
     if not cdn_url:
         return jsonify({"error": "No cdn_url"}), 400
 
@@ -578,8 +580,10 @@ def fh_resolve():
             with open(log_path, "a") as f:
                 f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] Downloading: {safe_name}\n")
                 if is_trailer:
-                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] WARNING: Only trailer URL found — user may not be premium on this video\n")
+                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] WARNING: Only trailer URL found\n")
                 f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] CDN URL: {cdn_url[:80]}...\n")
+                if debug_dump:
+                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] DEBUG page attrs: {json.dumps(debug_dump, ensure_ascii=False)[:2000]}\n")
                 f.flush()
 
             container = docker_client.containers.get(QBT_CONTAINER)
