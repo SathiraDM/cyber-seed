@@ -77,10 +77,8 @@ async function processItem(item) {
   // Wait for tab to finish loading
   await waitForTabLoad(tab.id);
 
-  // Small extra delay for JS/SPA to populate data attributes
-  await sleep(8000);
-
   // Ask content script to extract video data
+  // (the function itself waits up to 10s inside the tab for the SPA to hydrate)
   let result;
   try {
     const results = await chrome.scripting.executeScript({
@@ -127,7 +125,20 @@ async function processItem(item) {
 }
 
 // This function runs IN the tab context (injected via scripting API)
-function extractVideoData() {
+async function extractVideoData() {
+  // Wait for the SPA to hydrate data-el-formats (up to 10s)
+  await new Promise(resolve => {
+    const deadline = Date.now() + 10000;
+    function poll() {
+      if (document.querySelector('[data-el-formats]') || Date.now() >= deadline) {
+        resolve();
+      } else {
+        setTimeout(poll, 300);
+      }
+    }
+    poll();
+  });
+
   try {
     // ── Page metadata — use href patterns, reliable across site updates ──
     const title = (
