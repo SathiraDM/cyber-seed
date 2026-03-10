@@ -36,6 +36,7 @@
     <a href="" id="link-qbt" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="qBittorrent">&#x1F30A; qBit</a>
     <a href="" id="link-mon" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="System Monitor">&#x1F4CA; Monitor</a>
     <a href="" id="link-files" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="File Browser">&#x1F4C1; Files</a>
+    <a href="" id="link-browser" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="Virtual Browser">&#x1F5A5; Browser</a>
     <form action="/logout" method="post" class="inline">
       <button class="text-xs px-3 py-1.5 bg-red-900/30 border border-red-800/50 rounded-lg hover:bg-red-900/50 text-red-300 transition">Logout</button>
     </form>
@@ -51,7 +52,6 @@
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="nm">NM</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="fh">FapHouse</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="direct">Direct</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="browser">&#x1F5A5; Browser</button>
   </nav>
 
   <!-- Submit form -->
@@ -91,17 +91,6 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- Browser iframe -->
-  <section id="browserSection" class="hidden fade-in">
-    <div class="bg-cs-card border border-cs-border rounded-xl overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-2 border-b border-cs-border">
-        <span class="text-sm text-gray-400">Virtual Browser</span>
-        <a id="link-browser-ext" href="" target="_blank" class="text-xs text-cs-accent hover:underline">Open in new tab</a>
-      </div>
-      <iframe id="browserFrame" class="w-full border-0" style="height:70vh"></iframe>
     </div>
   </section>
 
@@ -157,7 +146,7 @@ const HOST = location.hostname;
 document.getElementById('link-qbt').href = '//' + HOST + ':8080';
 document.getElementById('link-mon').href = '//' + HOST + ':61208';
 document.getElementById('link-files').href = '//' + HOST + ':8334';
-document.getElementById('link-browser-ext').href = '//' + HOST + ':3456';
+document.getElementById('link-browser').href = '//' + HOST + ':3456';
 
 let currentSource = 'all';
 let currentPage = 1;
@@ -177,12 +166,6 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     currentSource = btn.dataset.source;
     currentPage = 1;
 
-    var isBrowser = (currentSource === 'browser');
-    document.getElementById('submitSection').classList.toggle('hidden', isBrowser);
-    document.getElementById('browserSection').classList.toggle('hidden', !isBrowser);
-    document.getElementById('statsBar').classList.toggle('hidden', isBrowser);
-    document.getElementById('jobsList').classList.toggle('hidden', isBrowser);
-    document.getElementById('pagination').classList.toggle('hidden', isBrowser);
     document.getElementById('emptyState').classList.add('hidden');
 
     var fmtSel = document.getElementById('fmtSelect');
@@ -197,11 +180,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
       document.getElementById('urlInput').placeholder = 'Paste URL(s) - one per line for bulk downloads';
     }
 
-    if (isBrowser) {
-      var frame = document.getElementById('browserFrame');
-      if (!frame.src || frame.src === '') frame.src = '//' + HOST + ':3456/vnc.html?autoconnect=true&resize=scale';
-    }
-    if (!isBrowser) loadJobs();
+    loadJobs();
   });
 });
 
@@ -249,7 +228,7 @@ function hideDupeWarning() {
 function loadJobs() {
   var status = document.getElementById('statusFilter').value;
   var search = document.getElementById('searchInput').value;
-  var src = (currentSource === 'browser') ? 'all' : currentSource;
+  var src = currentSource;
   var params = 'source=' + src + '&status=' + status + '&page=' + currentPage + '&per_page=' + PER_PAGE + '&search=' + encodeURIComponent(search);
   fetch('/api/jobs?' + params).then(function(r) { return r.json(); }).then(function(data) {
     renderJobs(data.jobs);
