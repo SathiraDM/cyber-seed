@@ -138,8 +138,11 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
         if name:
             cmd.append(name)
         env_list = [f"YT_FORMAT={fmt}"]
+        # Map short source codes to provider script names
+        _provider_map = {"yt": "youtube", "fb": "facebook", "nm": "noodlemagazine", "direct": "direct"}
         if source and source not in ("auto", ""):
-            env_list.append(f"FORCE_PROVIDER={source}")
+            provider = _provider_map.get(source, source)
+            env_list.append(f"FORCE_PROVIDER={provider}")
         exec_id = docker_client.api.exec_create(container.id, cmd, environment=env_list)["Id"]
         stream = docker_client.api.exec_start(exec_id, stream=True)
         with open(log_path, "a") as f:
