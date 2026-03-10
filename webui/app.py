@@ -95,7 +95,39 @@ def parse_ytdlp_progress(line):
         return {"download_pct": 100.0}
     return None
 
+def parse_rclone_progress(line):
+    """Parse rclone JSON log line for upload progress."""
+    if '"level"' not in line and '"stats"' not in line:
+        return None
+    try:
+        data = json.loads(line)
+        stats = data.get("stats", {})
+        total = stats.get("totalBytes", 0)
+        done = stats.get("bytes", 0)
+        if total > 0:
+            pct = round(done / total * 100, 1)
+            eta_secs = stats.get("eta")
+            speed_bps = stats.get("speed", 0)
+            speed_str = ""
+            if speed_bps:
+                mb = speed_bps / 1_048_576
+                speed_str = f"{mb:.1f} MiB/s"
+            eta_str = ""
+            if eta_secs is not None:
+                m, s = divmod(int(eta_secs), 60)
+                eta_str = f"{m:02d}:{s:02d}" if m else f"{s}s"
+            return {"upload_pct": pct, "speed": speed_str, "eta": eta_str}
+    except Exception:
+        pass
+    return None
+
 def parse_aria2_progress(line):
+    m = re.search(r'\[#\w+\s+[\d.]+\w*/[\d.]+\w*\(([\d.]+)%\).*DL:([\d.]+\w+)(?:\s+ETA:(\S+))?', line)
+    if m:
+        return {"download_pct": float(m.group(1)), "speed": m.group(2) + "/s", "eta": m.group(3) or ""}
+    return None
+
+
     m = re.search(r'\[#\w+\s+[\d.]+\w*/[\d.]+\w*\(([\d.]+)%\).*DL:([\d.]+\w+)(?:\s+ETA:(\S+))?', line)
     if m:
         return {"download_pct": float(m.group(1)), "speed": m.group(2) + "/s", "eta": m.group(3) or ""}
@@ -152,6 +184,12 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
                     f.write(text)
                     f.flush()
                     for line in text.splitlines():
+                        if "Uploading →" in line or "Uploading ->" in line:
+                            db.update_job(job_id, status="uploading", upload_pct=0)
+                        rclone = parse_rclone_progress(line)
+                        if rclone:
+                            db.update_job(job_id, status="uploading", **rclone)
+                            continue
                         prog = parse_ytdlp_progress(line) or parse_aria2_progress(line)
                         if prog:
                             db.update_job(job_id, **prog)
