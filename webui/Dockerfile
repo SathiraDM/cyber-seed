@@ -2,7 +2,7 @@ FROM python:3.12-alpine
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir flask docker requests beautifulsoup4
+RUN pip install --no-cache-dir flask flask-socketio simple-websocket docker requests beautifulsoup4
 
 COPY app.py db.py ./
 COPY templates/ templates/

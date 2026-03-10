@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CyberSeed</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{cs:{bg:'#0f1117',card:'#161920',border:'#2a2d38',accent:'#6366f1',green:'#22c55e',red:'#ef4444',yellow:'#eab308',blue:'#3b82f6'}}}}}</script>
   <style>
     body{background:#0f1117;color:#e2e8f0;font-family:Inter,system-ui,sans-serif}
@@ -343,10 +344,12 @@ function closeLog() {
   document.getElementById('logModal').classList.add('hidden');
 }
 
-// ── Polling ──
-setInterval(function() {
-  if (currentSource !== 'browser') loadJobs();
-}, 3000);
+// ── WebSocket push (replaces polling) ──
+var socket = io({ transports: ['websocket', 'polling'] });
+socket.on('refresh', function() {
+  loadJobs();
+});
+socket.on('connect', function() { loadJobs(); });
 
 // ── Keyboard ──
 document.getElementById('urlInput').addEventListener('keydown', function(e) {

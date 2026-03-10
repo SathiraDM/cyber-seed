@@ -20,10 +20,12 @@ from pathlib import Path
 
 from flask import (Flask, Response, jsonify, redirect, render_template,
                    request, send_file, session, stream_with_context, url_for)
+from flask_socketio import SocketIO
 
 import db
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 JOBS_DIR       = Path("/logs/jobs")
 DOWNLOADS_ROOT = Path(os.environ.get("DOWNLOADS_ROOT", "/downloads"))
@@ -34,6 +36,24 @@ app.secret_key = hashlib.sha256(f"cyber-seed:{WEBUI_PASS}".encode()).hexdigest()
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 db.init_db()
+
+# ── WebSocket push thread ─────────────────────────────────────────────
+# Pushes a 'refresh' event to all connected clients.
+# Runs fast (1s) when active jobs exist, slow (8s) when idle.
+
+def _jobs_push_thread():
+    ACTIVE_STATUSES = {"running", "downloading", "uploading", "processing", "queued", "pending"}
+    while True:
+        try:
+            jobs = db.list_jobs(source="", status="", page=1, per_page=200, search="")
+            has_active = any(j["status"] in ACTIVE_STATUSES for j in jobs["jobs"])
+            socketio.emit("refresh", {"active": has_active})
+            time.sleep(1 if has_active else 8)
+        except Exception:
+            time.sleep(8)
+
+_push_thread = threading.Thread(target=_jobs_push_thread, daemon=True)
+_push_thread.start()
 
 # ── CORS (Chrome extension) ──────────────────────────────────────────
 
@@ -615,4 +635,4 @@ def api_files_delete():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8888, threaded=True)
+    socketio.run(app, host="0.0.0.0", port=8888, allow_unsafe_werkzeug=True)
