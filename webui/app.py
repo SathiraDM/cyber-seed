@@ -104,9 +104,9 @@ def _start_orphan_recovery():
     """Called once at startup to recover jobs stuck in active states."""
     if not docker_client:
         return
-    stuck = db.list_jobs(source="", status="downloading", page=1, per_page=100, search="")["jobs"]
-    stuck += db.list_jobs(source="", status="running", page=1, per_page=100, search="")["jobs"]
-    stuck += db.list_jobs(source="", status="processing", page=1, per_page=100, search="")["jobs"]
+    stuck = db.list_jobs(source="", status="downloading", page=1, per_page=100, search="")[0]
+    stuck += db.list_jobs(source="", status="running", page=1, per_page=100, search="")[0]
+    stuck += db.list_jobs(source="", status="processing", page=1, per_page=100, search="")[0]
     for job in stuck:
         threading.Thread(target=_recover_orphan, args=(job,), daemon=True).start()
         print(f"[webui] Recovering orphaned job {job['id']} ({job.get('name','?')})")
@@ -119,8 +119,8 @@ def _jobs_push_thread():
     ACTIVE_STATUSES = {"running", "downloading", "uploading", "processing", "queued", "pending"}
     while True:
         try:
-            jobs = db.list_jobs(source="", status="", page=1, per_page=200, search="")
-            has_active = any(j["status"] in ACTIVE_STATUSES for j in jobs["jobs"])
+            jobs = db.list_jobs(source="", status="", page=1, per_page=200, search="")[0]
+            has_active = any(j["status"] in ACTIVE_STATUSES for j in jobs)
             socketio.emit("refresh", {"active": has_active})
             time.sleep(1 if has_active else 8)
         except Exception:
