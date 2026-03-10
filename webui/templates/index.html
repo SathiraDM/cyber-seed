@@ -1,424 +1,377 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CyberSeed</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{cs:{bg:'#0f1117',card:'#161920',border:'#2a2d38',accent:'#6366f1',green:'#22c55e',red:'#ef4444',yellow:'#eab308',blue:'#3b82f6'}}}}}</script>
   <style>
-    :root { --accent: #0dcaf0; }
-    body { background: #0d1117; color: #c9d1d9; font-family: 'Cascadia Code', 'Fira Code', monospace; }
-    .navbar-brand { color: var(--accent) !important; font-weight: 700; letter-spacing: 2px; }
-    .card { background: #161b22; border: 1px solid #30363d; }
-    .card-header { background: #21262d; border-bottom: 1px solid #30363d; }
-    .log-box {
-      background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-      height: 320px; overflow-y: auto; padding: 10px;
-      font-size: .78rem; white-space: pre-wrap; word-break: break-all;
-      color: #8b949e;
-    }
-    .log-box .log-line { line-height: 1.6; }
-    .badge-queued  { background: #6e7681 !important; }
-    .badge-running { background: #d29922 !important; animation: pulse 1.2s infinite; }
-    .badge-done    { background: #238636 !important; }
-    .badge-failed  { background: #da3633 !important; }
-    .badge-cancelled { background: #6e7681 !important; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
-    /* Source badges */
-    .src-youtube  { background: #ff0000 !important; color: #fff !important; }
-    .src-facebook { background: #1877f2 !important; color: #fff !important; }
-    .src-direct   { background: #3d444d !important; color: #c9d1d9 !important; }
-    .src-vimeo    { background: #19b7ea !important; color: #fff !important; }
-    .src-twitter  { background: #1d9bf0 !important; color: #fff !important; }
-    .src-instagram{ background: #c13584 !important; color: #fff !important; }
-    .src-tiktok   { background: #010101 !important; color: #fff !important; border: 1px solid #444 !important; }
-    .src-twitch        { background: #9146ff !important; color: #fff !important; }
-    .src-noodlemagazine { background: #c0392b !important; color: #fff !important; }
-    .src-faphouse       { background: #8e44ad !important; color: #fff !important; }
-    .src-auto           { background: #21262d !important; color: #8b949e !important; border: 1px solid #30363d !important; }
-    /* Source pill in form */
-    #source-pill { transition: all .2s; }
-    #quality-wrap { transition: opacity .2s; }
-    .job-row { cursor: pointer; transition: background .15s; }
-    .job-row:hover { background: #21262d; }
-    .job-row.active-row { background: #1c2128; border-left: 3px solid var(--accent); }
-    #url-submit-form textarea:focus, #url-submit-form input:focus { border-color: var(--accent); box-shadow: none; }
-    .spinner-xs { width: 12px; height: 12px; border-width: 2px; }
-    h6.section-label { font-size: .65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #6e7681; }
-    #active-log-header { font-size: .8rem; color: var(--accent); word-break: break-all; }
-    .url-col { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    body{background:#0f1117;color:#e2e8f0;font-family:Inter,system-ui,sans-serif}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#161920}::-webkit-scrollbar-thumb{background:#3a3d48;border-radius:3px}
+    .progress-bar{transition:width .5s ease-in-out}
+    .tab-btn.active{color:#6366f1;border-bottom:2px solid #6366f1}
+    .glass{background:rgba(22,25,32,.8);backdrop-filter:blur(12px)}
+    textarea{field-sizing:content;min-height:2.5rem}
+    .badge{font-size:.65rem;padding:2px 8px;border-radius:9999px;font-weight:600;text-transform:uppercase}
+    .badge-queued,.badge-pending{background:#374151;color:#9ca3af}
+    .badge-running,.badge-downloading{background:#1e3a5f;color:#60a5fa}
+    .badge-processing{background:#3b2f6b;color:#a78bfa}
+    .badge-done{background:#14532d;color:#4ade80}
+    .badge-failed{background:#7f1d1d;color:#fca5a5}
+    .badge-cancelled{background:#44403c;color:#a8a29e}
+    .fade-in{animation:fadeIn .3s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   </style>
 </head>
-<body>
+<body class="min-h-screen">
 
-<nav class="navbar navbar-dark border-bottom border-secondary mb-4">
-  <div class="container-fluid px-4">
-    <span class="navbar-brand">⬡ CyberSeed</span>
-    <div class="d-flex align-items-center gap-3">
-      <a href="/files" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.75rem">📁 Files</a>
-      <a href="/browser" class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size:.75rem">🌐 Browser</a>
-      <span class="text-secondary" style="font-size:.8rem" id="docker-status">connecting…</span>
-      <form method="POST" action="/logout" class="mb-0">
-        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">logout</button>
-      </form>
-    </div>
+<!-- Top bar -->
+<header class="sticky top-0 z-50 glass border-b border-cs-border px-4 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <h1 class="text-xl font-bold text-white tracking-tight">&olarr; CyberSeed</h1>
+    <span class="text-xs text-gray-500">download &amp; upload engine</span>
   </div>
-</nav>
+  <div class="flex items-center gap-2">
+    <a href="" id="link-qbt" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="qBittorrent">&#x1F30A; qBit</a>
+    <a href="" id="link-mon" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="System Monitor">&#x1F4CA; Monitor</a>
+    <a href="" id="link-files" target="_blank" class="text-xs px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg hover:bg-cs-border transition" title="File Browser">&#x1F4C1; Files</a>
+    <form action="/logout" method="post" class="inline">
+      <button class="text-xs px-3 py-1.5 bg-red-900/30 border border-red-800/50 rounded-lg hover:bg-red-900/50 text-red-300 transition">Logout</button>
+    </form>
+  </div>
+</header>
 
-<div class="container-fluid px-4">
-  <div class="row g-4">
+<main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
-    <!-- ── Left: Submit ──────────────────────────── -->
-    <div class="col-lg-4">
-      <div class="card mb-4">
-        <div class="card-header"><h6 class="section-label mb-0">Submit Download</h6></div>
-        <div class="card-body">
-          <form id="url-submit-form">
-            <div class="mb-3">
-              <label class="form-label small text-secondary d-flex justify-content-between align-items-center">
-                <span>URL(s) <span class="text-muted">(one per line)</span></span>
-                <span id="source-pill" class="badge src-auto">auto-detect</span>
-              </label>
-              <textarea id="input-urls" class="form-control bg-dark text-light border-secondary" rows="5"
-                placeholder="https://youtube.com/watch?v=&#8230;&#10;https://facebook.com/watch?v=&#8230;&#10;https://example.com/file.zip myname"></textarea>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small text-secondary">Source <span class="text-muted">(provider to use)</span></label>
-              <select id="input-source" class="form-select bg-dark text-light border-secondary">
-                <option value="auto" selected>&#128269; Auto-detect from URL</option>
-                <option value="youtube">&#9654; YouTube (yt-dlp)</option>
-                <option value="facebook">&#11035; Facebook (yt-dlp)</option>
-                <option value="vimeo">&#9673; Vimeo (yt-dlp)</option>
-                <option value="twitter">&#10005; Twitter / X (yt-dlp)</option>
-                <option value="instagram">&#9672; Instagram (yt-dlp)</option>
-                <option value="tiktok">&#9834; TikTok (yt-dlp)</option>
-                <option value="twitch">&#9673; Twitch (yt-dlp)</option>
-                <option value="noodlemagazine">&#9679; NoodleMagazine (yt-dlp)</option>
-                <option value="faphouse">&#128274; FH (yt-dlp + cookies)</option>
-                <option value="direct">&#11015; Direct link (aria2c)</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small text-secondary">Default name <span class="text-muted">(optional)</span></label>
-              <input id="input-name" type="text" class="form-control bg-dark text-light border-secondary"
-                placeholder="e.g. my-video">
-            </div>
-            <div class="mb-3" id="quality-wrap">
-              <label class="form-label small text-secondary">Quality <span class="text-muted">(YouTube / yt-dlp)</span></label>
-              <select id="input-format" class="form-select bg-dark text-light border-secondary">
-                <option value="best" selected>Best available (default)</option>
-                <option value="2160p">4K — 2160p</option>
-                <option value="1080p">Full HD — 1080p</option>
-                <option value="720p">HD — 720p</option>
-                <option value="480p">SD — 480p</option>
-                <option value="360p">Low — 360p</option>
-                <option value="audio">Audio only — MP3</option>
-              </select>
-            </div>
-            <button type="submit" class="btn btn-info w-100 fw-bold">
-              <span id="submit-spinner" class="spinner-border spinner-xs me-2 d-none" role="status"></span>
-              Dispatch
-            </button>
-          </form>
-          <div id="submit-msg" class="mt-2 small"></div>
+  <!-- Source tabs -->
+  <nav class="flex gap-1 border-b border-cs-border overflow-x-auto" id="sourceTabs">
+    <button class="tab-btn active px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="all">All</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="yt">YouTube</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="nm">NM</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="fh">FapHouse</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="direct">Direct</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="browser">&#x1F5A5; Browser</button>
+  </nav>
+
+  <!-- Submit form -->
+  <section id="submitSection" class="bg-cs-card border border-cs-border rounded-xl p-5 fade-in">
+    <div class="flex gap-4">
+      <div class="flex-1 space-y-3">
+        <textarea id="urlInput" rows="1" placeholder="Paste URL(s) - one per line for bulk downloads"
+          class="w-full bg-cs-bg border border-cs-border rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cs-accent resize-y"></textarea>
+        <div class="flex gap-3 items-center flex-wrap">
+          <select id="fmtSelect" class="bg-cs-bg border border-cs-border rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-cs-accent">
+            <option value="best">Best quality</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="audio">Audio only</option>
+          </select>
+          <input id="nameInput" type="text" placeholder="Custom filename (optional)"
+            class="flex-1 bg-cs-bg border border-cs-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cs-accent">
+          <button id="submitBtn" onclick="submitUrls()"
+            class="px-6 py-2 bg-cs-accent hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition flex items-center gap-2">
+            <span>&#x2B07;</span> Download
+          </button>
         </div>
       </div>
-
-      <!-- Stats mini card -->
-      <div class="card">
-        <div class="card-body py-2 px-3">
-          <div class="row text-center g-0" id="stats-row">
-            <div class="col"><div class="fw-bold" id="stat-running">—</div><div class="text-secondary" style="font-size:.7rem">running</div></div>
-            <div class="col"><div class="fw-bold text-success" id="stat-done">—</div><div class="text-secondary" style="font-size:.7rem">done</div></div>
-            <div class="col"><div class="fw-bold text-danger" id="stat-failed">—</div><div class="text-secondary" style="font-size:.7rem">failed</div></div>
-            <div class="col"><div class="fw-bold text-secondary" id="stat-total">—</div><div class="text-secondary" style="font-size:.7rem">total</div></div>
+    </div>
+    <!-- Duplicate warning -->
+    <div id="dupeWarning" class="hidden mt-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4">
+      <div class="flex items-start gap-3">
+        <span class="text-yellow-400 text-lg">&#x26A0;</span>
+        <div class="flex-1">
+          <p class="text-yellow-300 text-sm font-medium">Duplicate URLs detected</p>
+          <p id="dupeMessage" class="text-yellow-400/70 text-xs mt-1"></p>
+          <ul id="dupeList" class="mt-2 text-xs text-yellow-500/80 space-y-1 max-h-32 overflow-y-auto"></ul>
+          <div class="mt-3 flex gap-2">
+            <button onclick="submitUrls(true)" class="px-4 py-1.5 bg-yellow-700/40 hover:bg-yellow-700/60 text-yellow-200 text-xs rounded-lg transition">Download Anyway</button>
+            <button onclick="hideDupeWarning()" class="px-4 py-1.5 bg-cs-card border border-cs-border text-gray-400 text-xs rounded-lg hover:bg-cs-border transition">Cancel</button>
           </div>
         </div>
       </div>
     </div>
+  </section>
 
-    <!-- ── Right: Jobs + Log ─────────────────────── -->
-    <div class="col-lg-8">
-      <!-- Job table -->
-      <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h6 class="section-label mb-0">Jobs</h6>
-          <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="loadJobs()">↻</button>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="clearJobs('finished')" title="Remove done/failed/cancelled jobs">Clear finished</button>
-            <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="clearJobs('all')" title="Remove all jobs">Clear all</button>
-          </div>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-dark table-hover mb-0" style="font-size:.8rem">
-              <thead class="text-secondary">
-                <tr>
-                  <th class="ps-3">ID</th>
-                  <th>Source</th>
-                  <th>URL / Name</th>
-                  <th>Quality</th>
-                  <th>Status</th>
-                  <th>Started</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="job-tbody">
-                <tr><td colspan="7" class="text-center text-secondary py-4">No jobs yet</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+  <!-- Browser iframe -->
+  <section id="browserSection" class="hidden fade-in">
+    <div class="bg-cs-card border border-cs-border rounded-xl overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-cs-border">
+        <span class="text-sm text-gray-400">Virtual Browser</span>
+        <a id="link-browser-ext" href="" target="_blank" class="text-xs text-cs-accent hover:underline">Open in new tab</a>
       </div>
-
-      <!-- Live log viewer -->
-      <div class="card" id="log-card" style="display:none">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <div>
-            <h6 class="section-label mb-0 d-inline">Live Log</h6>
-            <span id="active-log-header" class="ms-2"></span>
-          </div>
-          <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="closeLog()">✕</button>
-        </div>
-        <div class="card-body p-2">
-          <div class="log-box" id="log-box"></div>
-        </div>
-      </div>
+      <iframe id="browserFrame" class="w-full border-0" style="height:70vh"></iframe>
     </div>
+  </section>
 
+  <!-- Stats bar -->
+  <div id="statsBar" class="flex gap-3 flex-wrap text-xs">
+    <span class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg">Total: <b id="statTotal" class="text-white">0</b></span>
+    <span class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg">Running: <b id="statRunning" class="text-blue-400">0</b></span>
+    <span class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg">Done: <b id="statDone" class="text-green-400">0</b></span>
+    <span class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg">Failed: <b id="statFailed" class="text-red-400">0</b></span>
+    <div class="flex-1"></div>
+    <select id="statusFilter" class="bg-cs-card border border-cs-border rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-cs-accent" onchange="loadJobs()">
+      <option value="all">All statuses</option>
+      <option value="queued">Queued</option>
+      <option value="pending">Pending</option>
+      <option value="running">Running</option>
+      <option value="downloading">Downloading</option>
+      <option value="done">Done</option>
+      <option value="failed">Failed</option>
+    </select>
+    <input id="searchInput" type="text" placeholder="Search..."
+      class="bg-cs-card border border-cs-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cs-accent w-48">
+    <button onclick="clearFinished()" class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg text-gray-400 hover:text-red-400 hover:border-red-800 transition text-xs">&#x1F5D1; Clear finished</button>
+  </div>
+
+  <!-- Job cards -->
+  <div id="jobsList" class="space-y-2"></div>
+
+  <!-- Pagination -->
+  <div id="pagination" class="flex items-center justify-center gap-2 text-sm"></div>
+
+  <!-- Empty state -->
+  <div id="emptyState" class="hidden text-center py-16 text-gray-600">
+    <div class="text-5xl mb-4">&#x1F4ED;</div>
+    <p class="text-lg font-medium">No downloads yet</p>
+    <p class="text-sm mt-1">Paste a URL above to get started</p>
+  </div>
+
+</main>
+
+<!-- Log modal -->
+<div id="logModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-filter backdrop-blur-sm" onclick="if(event.target===this)closeLog()">
+  <div class="bg-cs-card border border-cs-border rounded-xl w-11/12 max-w-3xl" style="max-height:80vh;display:flex;flex-direction:column">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-cs-border">
+      <span class="text-sm font-medium text-white" id="logTitle">Job Log</span>
+      <button onclick="closeLog()" class="text-gray-500 hover:text-white text-lg">&times;</button>
+    </div>
+    <pre id="logContent" class="flex-1 overflow-auto p-5 text-xs text-gray-400 font-mono whitespace-pre-wrap"></pre>
   </div>
 </div>
 
 <script>
-let activeJobId = null;
-let activeEvtSrc = null;
+const HOST = location.hostname;
+document.getElementById('link-qbt').href = '//' + HOST + ':8080';
+document.getElementById('link-mon').href = '//' + HOST + ':61208';
+document.getElementById('link-files').href = '//' + HOST + ':8334';
+document.getElementById('link-browser-ext').href = '//' + HOST + ':3456';
 
-// ─ Source detection (mirrors app.py) ─────────────────
-const SOURCE_PATTERNS = [
-  { key: "youtube",   re: /youtube\.com|youtu\.be/i,               label: "▶ YouTube" },
-  { key: "facebook",  re: /facebook\.com|fb\.watch|fb\.com/i,      label: "⬛ Facebook" },
-  { key: "vimeo",     re: /vimeo\.com/i,                            label: "◉ Vimeo" },
-  { key: "twitter",   re: /twitter\.com|x\.com/i,                  label: "✕ X (Twitter)" },
-  { key: "instagram", re: /instagram\.com/i,                        label: "◈ Instagram" },
-  { key: "tiktok",    re: /tiktok\.com/i,                          label: "♪ TikTok" },
-  { key: "twitch",        re: /twitch\.tv/i,                          label: "◉ Twitch" },
-  { key: "noodlemagazine", re: /noodlemagazine\.com/i,                 label: "\u25cf NoodleMagazine" },
-  { key: "faphouse",       re: /faphouse\.com/i,                        label: "\ud83d\udd12 FH" },
-];
+let currentSource = 'all';
+let currentPage = 1;
+const PER_PAGE = 20;
+let searchTimer;
 
-const SOURCE_LABELS = {
-  youtube:   "▶ YouTube",
-  facebook:  "⬛ Facebook",
-  vimeo:     "◉ Vimeo",
-  twitter:   "✕ Twitter/X",
-  instagram: "◈ Instagram",
-  tiktok:    "♪ TikTok",
-  twitch:         "◉ Twitch",
-  noodlemagazine: "● NoodleMagazine",
-  faphouse:        "🔐 FH",
-  direct:          "⬇ Direct",
-};
-
-function detectSource(url) {
-  for (const p of SOURCE_PATTERNS) {
-    if (p.re.test(url)) return p.key;
-  }
-  return "direct";
-}
-
-// direct links don't benefit from quality selection
-const QUALITY_SOURCES = new Set(["youtube","facebook","vimeo","twitter","instagram","tiktok","twitch","noodlemagazine","faphouse"]);
-
-function updateFormForSource(src) {
-  const pill  = document.getElementById("source-pill");
-  const qwrap = document.getElementById("quality-wrap");
-  const effectiveSrc = src === "auto" ? "auto" : src;
-  pill.className   = `badge src-${effectiveSrc}`;
-  pill.textContent = effectiveSrc === "auto" ? "auto-detect" : (SOURCE_LABELS[effectiveSrc] || effectiveSrc);
-  const isVideo = QUALITY_SOURCES.has(src);
-  qwrap.style.opacity      = isVideo ? "1" : "0.35";
-  qwrap.style.pointerEvents = isVideo ? "auto" : "none";
-  if (!isVideo) document.getElementById("input-format").value = "best";
-}
-
-// source select drives the quality hint too
-document.getElementById("input-source").addEventListener("change", e => {
-  const src = e.target.value;
-  if (src === "auto") {
-    // re-derive from URL
-    const firstUrl = document.getElementById("input-urls").value.trim().split("\n")[0].trim().split(/\s+/)[0];
-    updateFormForSource(firstUrl ? detectSource(firstUrl) : "auto");
-  } else {
-    updateFormForSource(src);
-  }
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadJobs, 400);
 });
 
-document.getElementById("input-urls").addEventListener("input", e => {
-  // only update the pill if source dropdown is on auto
-  if (document.getElementById("input-source").value !== "auto") return;
-  const firstUrl = e.target.value.trim().split("\n")[0].trim().split(/\s+/)[0];
-  updateFormForSource(firstUrl ? detectSource(firstUrl) : "auto");
-});
+// ── Tabs ──
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    currentSource = btn.dataset.source;
+    currentPage = 1;
 
-// ─ Submit ────────────────────────────────────────────
-document.getElementById("url-submit-form").addEventListener("submit", async e => {
-  e.preventDefault();
-  const urls   = document.getElementById("input-urls").value.trim();
-  const name   = document.getElementById("input-name").value.trim();
-  const format = document.getElementById("input-format").value;
-  const source = document.getElementById("input-source").value;
-  if (!urls) return;
+    var isBrowser = (currentSource === 'browser');
+    document.getElementById('submitSection').classList.toggle('hidden', isBrowser);
+    document.getElementById('browserSection').classList.toggle('hidden', !isBrowser);
+    document.getElementById('statsBar').classList.toggle('hidden', isBrowser);
+    document.getElementById('jobsList').classList.toggle('hidden', isBrowser);
+    document.getElementById('pagination').classList.toggle('hidden', isBrowser);
+    document.getElementById('emptyState').classList.add('hidden');
 
-  const spinner = document.getElementById("submit-spinner");
-  const msg     = document.getElementById("submit-msg");
-  spinner.classList.remove("d-none");
-  msg.innerHTML = "";
-
-  try {
-    const r = await fetch("/api/submit", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ urls, name, format, source })
-    });
-    const data = await r.json();
-    if (r.ok) {
-        msg.innerHTML = `<span class="text-info">✓ Submitted ${data.submitted} job(s)</span>`;
-        document.getElementById("input-urls").value = "";
-        document.getElementById("input-name").value = "";
-        document.getElementById("input-format").value = "best";
-        document.getElementById("input-source").value = "auto";
-        updateFormForSource("auto");
-        loadJobs();
-        if (data.jobs?.length) openLog(data.jobs[0].id, data.jobs[0].url);
+    var fmtSel = document.getElementById('fmtSelect');
+    var nameSel = document.getElementById('nameInput');
+    if (currentSource === 'fh') {
+      fmtSel.classList.add('hidden');
+      nameSel.classList.add('hidden');
+      document.getElementById('urlInput').placeholder = 'Paste FapHouse URL(s) - one per line';
     } else {
-      msg.innerHTML = `<span class="text-danger">✗ ${data.error}</span>`;
+      fmtSel.classList.remove('hidden');
+      nameSel.classList.remove('hidden');
+      document.getElementById('urlInput').placeholder = 'Paste URL(s) - one per line for bulk downloads';
     }
-  } catch(err) {
-    msg.innerHTML = `<span class="text-danger">✗ ${err}</span>`;
-  } finally {
-    spinner.classList.add("d-none");
-  }
+
+    if (isBrowser) {
+      var frame = document.getElementById('browserFrame');
+      if (!frame.src || frame.src === '') frame.src = '//' + HOST + ':3456/vnc.html?autoconnect=true&resize=scale';
+    }
+    if (!isBrowser) loadJobs();
+  });
 });
 
-// ─ Jobs ──────────────────────────────────────────────
-async function loadJobs() {
-  try {
-    const r = await fetch("/api/jobs");
-    if (!r.ok) return;
-    const jobs = await r.json();
-    renderJobs(jobs);
-    updateStats(jobs);
-    document.getElementById("docker-status").textContent = "● Connected";
-    document.getElementById("docker-status").className = "text-success";
-  } catch {
-    document.getElementById("docker-status").textContent = "● Error";
-    document.getElementById("docker-status").className = "text-danger";
+// ── Submit ──
+function submitUrls(force) {
+  var urls = document.getElementById('urlInput').value.trim();
+  if (!urls) return;
+  var isFH = (currentSource === 'fh');
+  var endpoint = isFH ? '/api/faphouse/queue' : '/api/submit';
+  var body;
+  if (isFH) {
+    body = { urls: urls, force: !!force };
+  } else {
+    body = { urls: urls, name: document.getElementById('nameInput').value,
+             format: document.getElementById('fmtSelect').value,
+             source: (currentSource === 'all' ? 'auto' : currentSource), force: !!force };
   }
+  fetch(endpoint, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (res.status === 409) {
+      res.json().then(showDupeWarning);
+      return;
+    }
+    if (res.ok) {
+      document.getElementById('urlInput').value = '';
+      hideDupeWarning();
+      loadJobs();
+    }
+  });
+}
+
+function showDupeWarning(data) {
+  document.getElementById('dupeWarning').classList.remove('hidden');
+  document.getElementById('dupeMessage').textContent = data.duplicates.length + ' of ' + data.total + ' URL(s) already downloaded or in progress.';
+  document.getElementById('dupeList').innerHTML = data.duplicates.map(function(u) { return '<li class="truncate">&#x2022; ' + u + '</li>'; }).join('');
+}
+
+function hideDupeWarning() {
+  document.getElementById('dupeWarning').classList.add('hidden');
+}
+
+// ── Load jobs ──
+function loadJobs() {
+  var status = document.getElementById('statusFilter').value;
+  var search = document.getElementById('searchInput').value;
+  var src = (currentSource === 'browser') ? 'all' : currentSource;
+  var params = 'source=' + src + '&status=' + status + '&page=' + currentPage + '&per_page=' + PER_PAGE + '&search=' + encodeURIComponent(search);
+  fetch('/api/jobs?' + params).then(function(r) { return r.json(); }).then(function(data) {
+    renderJobs(data.jobs);
+    renderPagination(data.page, data.pages, data.total);
+    loadStats();
+  });
 }
 
 function renderJobs(jobs) {
-  const tbody = document.getElementById("job-tbody");
-  if (!jobs.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-secondary py-4">No jobs yet</td></tr>`;
-    return;
+  var el = document.getElementById('jobsList');
+  var empty = document.getElementById('emptyState');
+  if (!jobs.length) { el.innerHTML = ''; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  el.innerHTML = jobs.map(function(j) {
+    var pct = j.download_pct || 0;
+    var isActive = ['running','downloading','processing','queued','pending'].indexOf(j.status) >= 0;
+    var title = j.name || j.url;
+    var meta = j.metadata || {};
+    var srcMap = {yt:'YT',nm:'NM',fh:'FH',direct:'Direct',fb:'FB',vim:'VIM',tw:'TW',ig:'IG',tt:'TT',twi:'TWI'};
+    var srcLabel = srcMap[j.source] || j.source.toUpperCase();
+    var safeName = (title || '').replace(/'/g, '');
+    var html = '<div class="bg-cs-card border border-cs-border rounded-xl p-4 fade-in hover:border-cs-accent/30 transition group">';
+    html += '<div class="flex items-start gap-3"><div class="flex-1 min-w-0">';
+    html += '<div class="flex items-center gap-2 mb-1">';
+    html += '<span class="badge badge-' + j.status + '">' + j.status + '</span>';
+    html += '<span class="text-[10px] px-2 py-0.5 bg-cs-border rounded text-gray-400">' + srcLabel + '</span>';
+    if (meta.studio) html += '<span class="text-[10px] text-purple-400">' + meta.studio + '</span>';
+    html += '</div>';
+    html += '<p class="text-sm text-white font-medium truncate" title="' + title + '">' + title + '</p>';
+    html += '<p class="text-[11px] text-gray-500 truncate mt-0.5">' + j.url + '</p>';
+    if (meta.models && meta.models.length) html += '<p class="text-[10px] text-gray-500 mt-1">&#x1F464; ' + meta.models.join(', ') + '</p>';
+    html += '</div>';
+    html += '<div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">';
+    html += '<button onclick="showLog(\'' + j.id + '\',\'' + safeName + '\')" class="p-1.5 rounded-lg hover:bg-cs-border text-gray-500 hover:text-white transition" title="View log">&#x1F4CB;</button>';
+    if (j.status === 'done' || j.status === 'failed' || j.status === 'cancelled') {
+      html += '<button onclick="deleteJob(\'' + j.id + '\')" class="p-1.5 rounded-lg hover:bg-red-900/30 text-gray-500 hover:text-red-400 transition" title="Delete">&#x1F5D1;</button>';
+    } else {
+      html += '<button onclick="cancelJob(\'' + j.id + '\')" class="p-1.5 rounded-lg hover:bg-red-900/30 text-gray-500 hover:text-red-400 transition" title="Cancel">&#x23F9;</button>';
+    }
+    html += '</div></div>';
+    if (isActive) {
+      html += '<div class="mt-3"><div class="flex items-center justify-between text-[11px] text-gray-400 mb-1.5">';
+      html += '<span>' + (j.status === 'downloading' || j.status === 'running' ? '&#x2B07; Downloading' : '&#x23F3; Waiting...') + '</span>';
+      html += '<span>' + pct.toFixed(1) + '%';
+      if (j.speed) html += ' &#x2022; ' + j.speed;
+      if (j.eta) html += ' &#x2022; ETA ' + j.eta;
+      if (j.file_size) html += ' &#x2022; ' + j.file_size;
+      html += '</span></div>';
+      html += '<div class="w-full h-1.5 bg-cs-bg rounded-full overflow-hidden">';
+      var barColor = (j.status === 'downloading' || j.status === 'running') ? 'bg-cs-accent' : 'bg-gray-600';
+      html += '<div class="progress-bar h-full rounded-full ' + barColor + '" style="width:' + pct + '%"></div>';
+      html += '</div></div>';
+    }
+    if (j.error) html += '<p class="text-[11px] text-red-400 mt-2">&#x26A0; ' + j.error + '</p>';
+    html += '<div class="flex items-center justify-between mt-2">';
+    html += '<span class="text-[10px] text-gray-600">' + j.id + '</span>';
+    html += '<span class="text-[10px] text-gray-600">' + new Date(j.created_at).toLocaleString() + '</span>';
+    html += '</div></div>';
+    return html;
+  }).join('');
+}
+
+function renderPagination(page, pages, total) {
+  var el = document.getElementById('pagination');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  var html = '<span class="text-xs text-gray-500">' + total + ' items</span>';
+  html += '<button onclick="goPage(' + (page - 1) + ')" class="px-2 py-1 rounded text-xs ' + (page <= 1 ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-cs-border') + '"' + (page <= 1 ? ' disabled' : '') + '>&laquo;</button>';
+  for (var p = Math.max(1, page - 2); p <= Math.min(pages, page + 2); p++) {
+    html += '<button onclick="goPage(' + p + ')" class="px-2.5 py-1 rounded text-xs ' + (p === page ? 'bg-cs-accent text-white' : 'text-gray-400 hover:text-white hover:bg-cs-border') + '">' + p + '</button>';
   }
-  tbody.innerHTML = jobs.map(j => {
-    const label    = j.name || j.url;
-  // Fix source: if stored as "auto" or missing, re-detect from URL on the fly
-  const rawSrc  = j.source && j.source !== "auto" ? j.source : detectSource(j.url || "");
-  const src      = rawSrc || "direct";
-  const srcBadge = `<span class="badge src-${src}">${SOURCE_LABELS[src] || src}</span>`;
-  const badge    = `<span class="badge badge-${j.status}">${j.status}</span>`;
-    const fmtLabel = (j.format && j.format !== "best")
-      ? `<span class="badge bg-secondary">${j.format}</span>`
-      : `<span class="text-secondary" style="font-size:.7rem">best</span>`;
-    const ts       = j.started_at ? j.started_at.replace("T"," ").slice(0,19) : "—";
-    const isActive = ["queued","running"].includes(j.status);
-    const actionBtn = isActive
-      ? `<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="cancelJob('${j.id}',event)" title="Cancel">✕</button>`
-      : `<button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="deleteJob('${j.id}',event)" title="Remove from history">🗑</button>`;
-    const active   = j.id === activeJobId ? "active-row" : "";
-    return `<tr class="job-row ${active}" onclick="openLog('${j.id}','${escHtml(label)}')">
-      <td class="ps-3 text-secondary">${j.id}</td>
-      <td>${srcBadge}</td>
-      <td class="url-col" title="${escHtml(j.url)}">${escHtml(label)}</td>
-      <td>${fmtLabel}</td>
-      <td>${badge}</td>
-      <td class="text-secondary">${ts}</td>
-      <td>${actionBtn}</td>
-    </tr>`;
-  }).join("");
+  html += '<button onclick="goPage(' + (page + 1) + ')" class="px-2 py-1 rounded text-xs ' + (page >= pages ? 'text-gray-700 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-cs-border') + '"' + (page >= pages ? ' disabled' : '') + '>&raquo;</button>';
+  el.innerHTML = html;
 }
 
-function updateStats(jobs) {
-  document.getElementById("stat-running").textContent = jobs.filter(j=>j.status==="running").length;
-  document.getElementById("stat-done").textContent    = jobs.filter(j=>j.status==="done").length;
-  document.getElementById("stat-failed").textContent  = jobs.filter(j=>j.status==="failed").length;
-  document.getElementById("stat-total").textContent   = jobs.length;
+function goPage(p) { currentPage = p; loadJobs(); }
+
+// ── Stats ──
+function loadStats() {
+  var src = (currentSource === 'all') ? '' : currentSource;
+  fetch('/api/jobs/stats' + (src ? '?source=' + src : '')).then(function(r) { return r.json(); }).then(function(s) {
+    document.getElementById('statTotal').textContent = s.total || 0;
+    document.getElementById('statRunning').textContent = (s.running || 0) + (s.downloading || 0) + (s.queued || 0) + (s.pending || 0);
+    document.getElementById('statDone').textContent = s.done || 0;
+    document.getElementById('statFailed').textContent = s.failed || 0;
+  });
 }
 
-// ─ Cancel ────────────────────────────────────────────
-async function cancelJob(id, e) {
-  e.stopPropagation();
-  await fetch(`/api/jobs/${id}/cancel`, {method:"POST"});
-  loadJobs();
+// ── Actions ──
+function cancelJob(id) { fetch('/api/jobs/' + id + '/cancel', {method:'POST'}).then(loadJobs); }
+function deleteJob(id) { fetch('/api/jobs/' + id, {method:'DELETE'}).then(loadJobs); }
+function clearFinished() {
+  var src = (currentSource === 'all') ? '' : '&source=' + currentSource;
+  fetch('/api/jobs?mode=finished' + src, {method:'DELETE'}).then(loadJobs);
 }
 
-// ─ Delete single job ─────────────────────────────────
-async function deleteJob(id, e) {
-  e.stopPropagation();
-  if (id === activeJobId) closeLog();
-  await fetch(`/api/jobs/${id}`, {method:"DELETE"});
-  loadJobs();
-}
-
-// ─ Clear all / finished ──────────────────────────────
-async function clearJobs(mode) {
-  if (mode === "all" && !confirm("Remove ALL jobs from history?")) return;
-  if (activeJobId) closeLog();
-  await fetch(`/api/jobs?mode=${mode}`, {method:"DELETE"});
-  loadJobs();
-}
-
-// ─ Log viewer ────────────────────────────────────────
-function openLog(jobId, label) {
-  if (activeEvtSrc) { activeEvtSrc.close(); activeEvtSrc = null; }
-  activeJobId = jobId;
-
-  document.getElementById("log-card").style.display = "";
-  document.getElementById("active-log-header").textContent = label;
-  const box = document.getElementById("log-box");
-  box.innerHTML = "";
-
-  const es = new EventSource(`/api/jobs/${jobId}/log`);
-  activeEvtSrc = es;
-
-  es.onmessage = ev => {
-    if (ev.data === "[DONE]") { es.close(); loadJobs(); return; }
-    const line = document.createElement("div");
-    line.className = "log-line";
-    line.textContent = ev.data;
-    box.appendChild(line);
-    box.scrollTop = box.scrollHeight;
-  };
-
-  es.onerror = () => { es.close(); };
-  loadJobs(); // refresh row highlight
+// ── Log modal ──
+function showLog(id, title) {
+  document.getElementById('logModal').classList.remove('hidden');
+  document.getElementById('logModal').style.display = 'flex';
+  document.getElementById('logTitle').textContent = title || ('Job ' + id);
+  var pre = document.getElementById('logContent');
+  pre.textContent = 'Loading...';
+  fetch('/api/jobs/' + id + '/log/full').then(function(r) { return r.text(); }).then(function(t) { pre.textContent = t; });
 }
 
 function closeLog() {
-  if (activeEvtSrc) { activeEvtSrc.close(); activeEvtSrc = null; }
-  activeJobId = null;
-  document.getElementById("log-card").style.display = "none";
+  document.getElementById('logModal').style.display = 'none';
+  document.getElementById('logModal').classList.add('hidden');
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
+// ── Polling ──
+setInterval(function() {
+  if (currentSource !== 'browser') loadJobs();
+}, 3000);
 
-// ─ Auto-refresh every 3 s ────────────────────────────
+// ── Keyboard ──
+document.getElementById('urlInput').addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitUrls();
+});
+
+// Init
 loadJobs();
-setInterval(loadJobs, 3000);
 </script>
 </body>
 </html>
