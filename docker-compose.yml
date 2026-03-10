@@ -61,9 +61,10 @@ services:
     privileged: true   # needed to read host disk/network stats
     environment:
       - GLANCES_OPT=-w --password  # web server mode with password
-      - GLANCES_PASSWORD=${QBT_WEBUI_PASS}
       - TZ=${TZ:-UTC}
     volumes:
+      # Pre-generated password file (avoids interactive prompt)
+      - ./glances-config/glances.pwd:/root/.config/glances/glances.pwd:ro
       # Read-only host filesystem mounts so Glances sees real disk stats
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/rootfs:ro
