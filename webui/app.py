@@ -111,8 +111,6 @@ def _start_orphan_recovery():
         threading.Thread(target=_recover_orphan, args=(job,), daemon=True).start()
         print(f"[webui] Recovering orphaned job {job['id']} ({job.get('name','?')})")
 
-threading.Thread(target=_start_orphan_recovery, daemon=True).start()
-
 
 # Pushes a 'refresh' event to all connected clients.
 # Runs fast (1s) when active jobs exist, slow (8s) when idle.
@@ -175,6 +173,9 @@ try:
 except Exception as e:
     print(f"[webui] Docker client error: {e}")
     docker_client = None
+
+# Kick off recovery for any jobs orphaned by a previous webui restart.
+threading.Thread(target=_start_orphan_recovery, daemon=True).start()
 
 # ── Progress parsing ──────────────────────────────────────────────────
 
