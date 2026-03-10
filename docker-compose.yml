@@ -114,7 +114,6 @@ services:
     ports:
       - "${FILEBROWSER_PORT:-8334}:80"
     command: >
-      --noauth
       --root=/srv
       --database=/database/filebrowser.db
 
