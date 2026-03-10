@@ -139,33 +139,46 @@ async function extractVideoData() {
   });
 
   try {
-    // ── Page metadata ──
+    // ── Page metadata — read from data attributes (video-specific, not page-wide) ──
+    const playerEl = document.querySelector('[data-el-hls-url]');
+
     const title = (
+      playerEl?.getAttribute('data-el-video-title') ||
       document.querySelector('h1')?.textContent?.trim() ||
       document.title.replace(/\s*[-|]\s*FapHouse.*$/i, '').trim()
     );
 
-    const modelLinks = document.querySelectorAll('a[href*="/pornstars/"], a[href*="/models/"]');
-    const models = [...new Set([...modelLinks].map(e => e.textContent.trim()).filter(Boolean))];
+    // data-el-pornstar-names is a JSON array of only this video's performers
+    let models = [];
+    try {
+      const raw = playerEl?.getAttribute('data-el-pornstar-names');
+      if (raw) models = JSON.parse(raw).filter(Boolean);
+    } catch (_) {}
 
-    const studioLink = document.querySelector('a[href*="/studios/"]');
-    const studio = studioLink?.textContent?.trim() || '';
+    const studio = playerEl?.getAttribute('data-el-studio-name') || '';
 
     const tagLinks = document.querySelectorAll('a[href*="/c/"], a[href*="/search/videos?q="]');
     const tags = [...new Set([...tagLinks].map(e => e.textContent.trim()).filter(Boolean))];
 
-    const allText = [...document.querySelectorAll('*')].find(el =>
-      el.childNodes.length === 1 &&
-      el.childNodes[0].nodeType === 3 &&
-      /^\d{1,2}:\d{2}(:\d{2})?$/.test(el.textContent.trim())
-    );
-    const duration = allText?.textContent?.trim() || '';
+    // data-el-duration is in seconds
+    let duration = '';
+    const durSecs = parseInt(playerEl?.getAttribute('data-el-duration') || '', 10);
+    if (!isNaN(durSecs) && durSecs > 0) {
+      const h = Math.floor(durSecs / 3600);
+      const m = Math.floor((durSecs % 3600) / 60);
+      const s = durSecs % 60;
+      duration = h > 0
+        ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+        : `${m}:${String(s).padStart(2,'0')}`;
+    }
 
     const viewsEl = document.querySelector('.views, .video-views, .view-count, [class*="view"], [class*="Views"]');
     const views = viewsEl?.textContent?.trim().replace(/[^\d,KkMm.]/g, '') || '';
 
-    const dateEl = document.querySelector('time, [class*="date"], [class*="Date"], [class*="publish"]');
-    const published = dateEl?.getAttribute('datetime') || dateEl?.textContent?.trim() || '';
+    const dateEl = document.querySelector('time[datetime]');
+    const published = dateEl?.getAttribute('datetime') ||
+      document.querySelector('[class*="date"], [class*="publish"]')?.textContent
+        ?.replace(/^published[:\s]*/i, '').trim() || '';
 
     const meta = { title, models, studio, tags, duration, views, published };
 
