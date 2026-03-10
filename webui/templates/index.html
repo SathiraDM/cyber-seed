@@ -50,7 +50,7 @@
     <button class="tab-btn active px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="all">All</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="yt">YouTube</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="nm">NM</button>
-    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="fh">FapHouse</button>
+    <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="fh">FH</button>
     <button class="tab-btn px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition whitespace-nowrap" data-source="direct">Direct</button>
   </nav>
 
@@ -173,7 +173,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
     if (currentSource === 'fh') {
       fmtSel.classList.add('hidden');
       nameSel.classList.add('hidden');
-      document.getElementById('urlInput').placeholder = 'Paste FapHouse URL(s) - one per line';
+      document.getElementById('urlInput').placeholder = 'Paste FH URL(s) - one per line';
     } else {
       fmtSel.classList.remove('hidden');
       nameSel.classList.remove('hidden');
