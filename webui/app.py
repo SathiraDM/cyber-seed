@@ -535,11 +535,7 @@ def fh_resolve():
     duration   = data.get("duration", "")
     views      = data.get("views", "")
     published  = data.get("published", "")
-    is_trailer = data.get("is_trailer", False)
-    is_hls     = data.get("is_hls",    False)
     source_url = data.get("source_url", "")
-
-    debug_dump  = data.get("debug_dump", {})
 
     if not cdn_url:
         return jsonify({"error": "No cdn_url"}), 400
@@ -580,11 +576,7 @@ def fh_resolve():
         try:
             with open(log_path, "a") as f:
                 f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] Downloading: {safe_name}\n")
-                if is_trailer:
-                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] WARNING: Only trailer URL found\n")
-                f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] CDN URL: {cdn_url[:80]}...\n")
-                if debug_dump:
-                    f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] DEBUG page attrs: {json.dumps(debug_dump, ensure_ascii=False)[:2000]}\n")
+                f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] HLS URL: {cdn_url[:80]}...\n")
                 f.flush()
 
             container = docker_client.containers.get(QBT_CONTAINER)
@@ -600,7 +592,6 @@ def fh_resolve():
                 "views":        views,
                 "published":    published,
                 "quality":      quality,
-                "is_trailer":   is_trailer,
                 "cdn_url":      cdn_url,
                 "downloaded_at": datetime.utcnow().isoformat(),
             }
@@ -614,28 +605,15 @@ def fh_resolve():
             tar_buf.seek(0)
             container.put_archive("/downloads/faphouse", tar_buf.getvalue())
 
-            if is_hls:
-                cmd = [
-                    "yt-dlp",
-                    "--no-playlist",
-                    "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-                    "--merge-output-format", "mp4",
-                    "-o", f"/downloads/faphouse/{safe_name[:-4]}.mp4",
-                    "--no-part",
-                    cdn_url,
-                ]
-            else:
-                cmd = [
-                    "aria2c",
-                    "--dir=/downloads/faphouse",
-                    f"--out={safe_name}",
-                    "--max-connection-per-server=16",
-                    "--split=16",
-                    "--min-split-size=1M",
-                    "--summary-interval=5",
-                    "--console-log-level=notice",
-                    cdn_url,
-                ]
+            cmd = [
+                "yt-dlp",
+                "--no-playlist",
+                "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                "--merge-output-format", "mp4",
+                "-o", f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                "--no-part",
+                cdn_url,
+            ]
             exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
             stream  = docker_client.api.exec_start(exec_id, stream=True)
 
@@ -654,8 +632,7 @@ def fh_resolve():
             else:
                 job["status"] = "failed"
                 with open(log_path, "a") as f:
-                    tool = "yt-dlp" if is_hls else "aria2c"
-                    f.write(f"\n✗ {tool} exited with code {exit_code}\n")
+                    f.write(f"\n✗ yt-dlp exited with code {exit_code}\n")
 
         except Exception as e:
             job["status"] = "failed"
