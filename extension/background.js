@@ -170,12 +170,18 @@ async function extractVideoData() {
 
     // data-el-pornstar-names is a JSON array of only this video's performers
     let models = [];
+    const studio = playerEl?.getAttribute('data-el-studio-name') || '';
     try {
       const raw = playerEl?.getAttribute('data-el-pornstar-names');
-      if (raw) models = JSON.parse(raw).filter(Boolean);
+      if (raw) {
+        const studioLower = studio.toLowerCase();
+        // FapHouse sometimes includes the studio name as the first entry in the
+        // performers array — filter it out so it only appears in the studio field.
+        models = JSON.parse(raw)
+          .filter(Boolean)
+          .filter(name => name.toLowerCase() !== studioLower);
+      }
     } catch (_) {}
-
-    const studio = playerEl?.getAttribute('data-el-studio-name') || '';
 
     const tagLinks = document.querySelectorAll('a[href*="/c/"], a[href*="/search/videos?q="]');
     const tags = [...new Set([...tagLinks].map(e => e.textContent.trim()).filter(Boolean))];

@@ -147,12 +147,6 @@ def parse_aria2_progress(line):
         return {"download_pct": float(m.group(1)), "speed": m.group(2) + "/s", "eta": m.group(3) or ""}
     return None
 
-
-    m = re.search(r'\[#\w+\s+[\d.]+\w*/[\d.]+\w*\(([\d.]+)%\).*DL:([\d.]+\w+)(?:\s+ETA:(\S+))?', line)
-    if m:
-        return {"download_pct": float(m.group(1)), "speed": m.group(2) + "/s", "eta": m.group(3) or ""}
-    return None
-
 # ── Source detection ──────────────────────────────────────────────────
 
 _SOURCE_PATTERNS = [
