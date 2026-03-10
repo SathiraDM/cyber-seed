@@ -534,7 +534,7 @@ def fh_resolve():
     tags       = data.get("tags", [])
     duration   = data.get("duration", "")
     views      = data.get("views", "")
-    rating     = data.get("rating", "")
+    published  = data.get("published", "")
     is_trailer = data.get("is_trailer", False)
     source_url = data.get("source_url", "")
 
@@ -593,7 +593,7 @@ def fh_resolve():
                 "tags":         tags,
                 "duration":     duration,
                 "views":        views,
-                "rating":       rating,
+                "published":    published,
                 "quality":      quality,
                 "is_trailer":   is_trailer,
                 "cdn_url":      cdn_url,

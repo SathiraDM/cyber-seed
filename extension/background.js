@@ -116,7 +116,7 @@ async function processItem(item) {
       tags:       result.tags      || [],
       duration:   result.duration  || '',
       views:      result.views     || '',
-      rating:     result.rating    || '',
+      published:  result.published || '',
       is_trailer: result.isTrailer || false,
       source_url: item.url,
     }),
@@ -128,48 +128,46 @@ async function processItem(item) {
 // This function runs IN the tab context (injected via scripting API)
 function extractVideoData() {
   try {
-    // ── Page metadata ─────────────────────────────────────────────────
+    // ── Page metadata — use href patterns, reliable across site updates ──
     const title = (
-      document.querySelector('.video-page__title, h1.video__title, h1.title, h1')
-        ?.textContent?.trim() ||
+      document.querySelector('h1')?.textContent?.trim() ||
       document.title.replace(/\s*[-|]\s*FapHouse.*$/i, '').trim()
     );
 
-    const modelEls = document.querySelectorAll(
-      '.model-list a, .performers-list a, .video-models a, ' +
-      '.video-info__performer a, [data-el-performers] a, ' +
-      '.models a, .pornstars a, .actresses a, .performer a'
+    // Models = /pornstars/ or /models/ links, deduplicated, near top of page
+    const modelLinks = document.querySelectorAll('a[href*="/pornstars/"], a[href*="/models/"]');
+    const models = [...new Set([...modelLinks].map(e => e.textContent.trim()).filter(Boolean))];
+
+    // Studio = first /studios/ link on the page (the video's own studio)
+    const studioLink = document.querySelector('a[href*="/studios/"]');
+    const studio = studioLink?.textContent?.trim() || '';
+
+    // Tags = category links (/c/) + search query links
+    const tagLinks = document.querySelectorAll('a[href*="/c/"], a[href*="/search/videos?q="]');
+    const tags = [...new Set([...tagLinks].map(e => e.textContent.trim()).filter(Boolean))];
+
+    // Duration — look for time-like text (MM:SS or HH:MM:SS)
+    const allText = [...document.querySelectorAll('*')].find(el =>
+      el.childNodes.length === 1 &&
+      el.childNodes[0].nodeType === 3 &&
+      /^\d{1,2}:\d{2}(:\d{2})?$/.test(el.textContent.trim())
     );
-    const models = [...new Set([...modelEls].map(e => e.textContent.trim()).filter(Boolean))];
+    const duration = allText?.textContent?.trim() || '';
 
-    const studio = (
-      document.querySelector(
-        '.production a, .studio a, .channel a, ' +
-        '.video-info__studio a, [data-el-studio], .label a, .network a'
-      )?.textContent?.trim() || ''
+    // Views — look for the views count element
+    const viewsEl = document.querySelector(
+      '.views, .video-views, .view-count, [class*="view"], [class*="Views"]'
     );
+    const views = viewsEl?.textContent?.trim().replace(/[^\d,KkMm.]/g, '') || '';
 
-    const tagEls = document.querySelectorAll(
-      '.video-tags a, .tags a, .tag-list a, [data-el-tags] a, .tags-container a'
-    );
-    const tags = [...new Set([...tagEls].map(e => e.textContent.trim()).filter(Boolean))];
+    // Published date
+    const dateEl = document.querySelector('time, [class*="date"], [class*="Date"], [class*="publish"]');
+    const published = dateEl?.getAttribute('datetime') || dateEl?.textContent?.trim() || '';
 
-    const duration = document.querySelector(
-      '.video-duration, .duration, time[datetime], .meta-duration'
-    )?.textContent?.trim() || '';
+    const meta = { title, models, studio, tags, duration, views, published };
 
-    const views = document.querySelector(
-      '.video-views, .views-count, .meta-views, .view-count'
-    )?.textContent?.trim() || '';
-
-    const rating = document.querySelector(
-      '.video-rating, .rating-value, .meta-rating, .like-count, .score'
-    )?.textContent?.trim() || '';
-
-    const meta = { title, models, studio, tags, duration, views, rating };
-
-    // ── Video URL — attempt 1: data-el-formats ────────────────────────
-    const el = document.querySelector('#video-full, .video-player [data-el-formats], [data-el-formats]');
+    // ── Video URL ──────────────────────────────────────────────────────
+    const el = document.querySelector('[data-el-formats]');
     if (el) {
       const formatsRaw = el.getAttribute('data-el-formats');
       if (formatsRaw) {
@@ -209,21 +207,19 @@ function extractVideoData() {
       }
     }
 
-    // ── Video URL — attempt 2: live <video> element src ───────────────
+    // Fallback: live <video> src
     const videoTag = document.querySelector('video');
     if (videoTag) {
-      const src = videoTag.currentSrc || videoTag.src || videoTag.querySelector('source')?.src;
-      if (src && src.startsWith('http') && !src.includes('/trailer/')) {
-        return { cdnUrl: src, quality: 'video-src', isTrailer: false, ...meta };
-      }
-      if (src && src.includes('.m3u8')) {
-        return { cdnUrl: src, quality: 'hls', isTrailer: false, ...meta };
+      const src = videoTag.currentSrc || videoTag.src ||
+                  videoTag.querySelector('source')?.src;
+      if (src?.startsWith('http')) {
+        return { cdnUrl: src, quality: 'auto', isTrailer: src.includes('/trailer/'), ...meta };
       }
     }
 
     return {
-      error: 'No video URL found — ensure you are logged in and on a premium video page',
-      debug: [...document.querySelectorAll('[data-el-formats]')].map(e => `${e.id || e.className}`.trim()).join('|').slice(0, 300),
+      error: 'No video URL found — make sure you are logged in with a premium faphouse account',
+      ...meta,
     };
   } catch (e) {
     return { error: `Extract error: ${e.message}` };
