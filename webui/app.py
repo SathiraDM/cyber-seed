@@ -37,7 +37,83 @@ JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 db.init_db()
 
-# ── WebSocket push thread ─────────────────────────────────────────────
+# ── Orphan recovery ───────────────────────────────────────────────────
+# If the webui restarted while a download was in progress, jobs can get
+# stuck in "downloading/running" forever because the monitoring thread died.
+# On startup we re-attach: for each stuck job, poll the qbt container
+# until yt-dlp for that filename is gone, then resolve to done/failed.
+
+def _recover_orphan(job):
+    """Background thread: waits for an orphaned exec to finish, then updates DB."""
+    job_id  = job["id"]
+    name    = job.get("name", "")
+    source  = job.get("source", "")
+    log_path = JOBS_DIR / f"{job_id}.log"
+
+    def _log(msg):
+        with open(log_path, "a") as f:
+            f.write(f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}] [recovery] {msg}\n")
+
+    _log(f"Recovering orphaned job (webui restarted mid-download): {name}")
+
+    try:
+        container = docker_client.containers.get(QBT_CONTAINER)
+    except Exception:
+        db.update_job(job_id, status="failed", ended_at=datetime.utcnow().isoformat(),
+                      error="Container not found during recovery")
+        return
+
+    # Poll until yt-dlp for this job is no longer running (or 2h timeout)
+    deadline = time.time() + 7200
+    safe_name_fragment = name[:30] if name else ""
+    while time.time() < deadline:
+        try:
+            result = container.exec_run("ps aux")
+            procs = result.output.decode("utf-8", errors="replace")
+            still_running = "yt-dlp" in procs and (not safe_name_fragment or safe_name_fragment in procs)
+            if not still_running:
+                break
+        except Exception:
+            break
+        time.sleep(10)
+
+    # Determine outcome by checking if the output file exists
+    file_found = False
+    try:
+        if source == "fh":
+            result = container.exec_run(f"test -f /downloads/faphouse/{name}")
+            file_found = result.exit_code == 0
+        elif name:
+            result = container.exec_run(f"test -d /downloads/{name}")
+            file_found = result.exit_code == 0
+    except Exception:
+        pass
+
+    if file_found:
+        db.update_job(job_id, status="done", download_pct=100.0,
+                      ended_at=datetime.utcnow().isoformat())
+        _log("Recovery: download completed successfully.")
+    else:
+        db.update_job(job_id, status="failed",
+                      ended_at=datetime.utcnow().isoformat(),
+                      error="Process not found after webui restart — may have completed; check /downloads")
+        _log("Recovery: could not confirm completion; marked failed.")
+
+
+def _start_orphan_recovery():
+    """Called once at startup to recover jobs stuck in active states."""
+    if not docker_client:
+        return
+    stuck = db.list_jobs(source="", status="downloading", page=1, per_page=100, search="")["jobs"]
+    stuck += db.list_jobs(source="", status="running", page=1, per_page=100, search="")["jobs"]
+    stuck += db.list_jobs(source="", status="processing", page=1, per_page=100, search="")["jobs"]
+    for job in stuck:
+        threading.Thread(target=_recover_orphan, args=(job,), daemon=True).start()
+        print(f"[webui] Recovering orphaned job {job['id']} ({job.get('name','?')})")
+
+threading.Thread(target=_start_orphan_recovery, daemon=True).start()
+
+
 # Pushes a 'refresh' event to all connected clients.
 # Runs fast (1s) when active jobs exist, slow (8s) when idle.
 
