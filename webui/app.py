@@ -536,6 +536,7 @@ def fh_resolve():
     views      = data.get("views", "")
     published  = data.get("published", "")
     is_trailer = data.get("is_trailer", False)
+    is_hls     = data.get("is_hls",    False)
     source_url = data.get("source_url", "")
 
     debug_dump  = data.get("debug_dump", {})
@@ -613,17 +614,28 @@ def fh_resolve():
             tar_buf.seek(0)
             container.put_archive("/downloads/faphouse", tar_buf.getvalue())
 
-            cmd = [
-                "aria2c",
-                "--dir=/downloads/faphouse",
-                f"--out={safe_name}",
-                "--max-connection-per-server=16",
-                "--split=16",
-                "--min-split-size=1M",
-                "--summary-interval=5",
-                "--console-log-level=notice",
-                cdn_url,
-            ]
+            if is_hls:
+                cmd = [
+                    "yt-dlp",
+                    "--no-playlist",
+                    "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                    "--merge-output-format", "mp4",
+                    "-o", f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                    "--no-part",
+                    cdn_url,
+                ]
+            else:
+                cmd = [
+                    "aria2c",
+                    "--dir=/downloads/faphouse",
+                    f"--out={safe_name}",
+                    "--max-connection-per-server=16",
+                    "--split=16",
+                    "--min-split-size=1M",
+                    "--summary-interval=5",
+                    "--console-log-level=notice",
+                    cdn_url,
+                ]
             exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
             stream  = docker_client.api.exec_start(exec_id, stream=True)
 
@@ -642,7 +654,8 @@ def fh_resolve():
             else:
                 job["status"] = "failed"
                 with open(log_path, "a") as f:
-                    f.write(f"\n✗ aria2c exited with code {exit_code}\n")
+                    tool = "yt-dlp" if is_hls else "aria2c"
+                    f.write(f"\n✗ {tool} exited with code {exit_code}\n")
 
         except Exception as e:
             job["status"] = "failed"

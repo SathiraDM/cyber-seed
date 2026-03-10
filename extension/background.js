@@ -116,6 +116,7 @@ async function processItem(item) {
       views:      result.views     || '',
       published:  result.published || '',
       is_trailer: result.isTrailer || false,
+      is_hls:     result.isHls    || false,
       source_url: item.url,
       debug_dump: result.debugDump || {},
     }),
@@ -179,9 +180,9 @@ async function extractVideoData() {
     const meta = { title, models, studio, tags, duration, views, published };
 
     // ── Video URL ──────────────────────────────────────────────────────
-    // Dump all data-el-* attributes and video src for debugging
+    // Collect debug info
     const debugDump = {};
-    document.querySelectorAll('[data-el-formats],[data-el-hls],[data-el-src],[data-el-url],[data-el-stream],[data-src],[data-url],[data-hls]').forEach(el => {
+    document.querySelectorAll('[data-el-formats],[data-el-hls-url],[data-el-src],[data-el-url],[data-el-stream],[data-src],[data-url],[data-hls]').forEach(el => {
       for (const attr of el.attributes) {
         if (attr.name.startsWith('data-')) {
           debugDump[attr.name] = attr.value.slice(0, 300);
@@ -195,6 +196,14 @@ async function extractVideoData() {
       videoEl.querySelectorAll('source').forEach((s, i) => { debugDump[`source[${i}].src`] = s.src?.slice(0, 300) || ''; });
     }
 
+    // ── 1. Prefer HLS stream (full video) over data-el-formats (trailer only on faphouse) ──
+    const hlsEl = document.querySelector('[data-el-hls-url]');
+    const hlsUrl = hlsEl?.getAttribute('data-el-hls-url');
+    if (hlsUrl) {
+      return { cdnUrl: hlsUrl, quality: '1080', isHls: true, isTrailer: false, debugDump, ...meta };
+    }
+
+    // ── 2. Fall back to data-el-formats mp4 links ──
     const el = document.querySelector('[data-el-formats]');
     if (el) {
       const formatsRaw = el.getAttribute('data-el-formats');
