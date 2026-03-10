@@ -111,16 +111,21 @@ services:
     container_name: cyber-seed-files
     restart: unless-stopped
     user: "0:0"
+    environment:
+      - QBT_WEBUI_PASS=${QBT_WEBUI_PASS}
     volumes:
       - ${DOWNLOADS_PATH:-./downloads}:/srv
       - filebrowser_data:/database
-      # Custom settings.json with authMethod=json to enforce login
-      - ./filebrowser-config/settings.json:/config/settings.json:ro
+      # Init script: creates DB with json auth + admin user on first run
+      - ./filebrowser-config/init.sh:/init-auth.sh:ro
     ports:
       - "${FILEBROWSER_PORT:-8334}:80"
+    entrypoint: ["/bin/sh", "/init-auth.sh"]
     command: >
       --root=/srv
       --database=/database/filebrowser.db
+      --address=0.0.0.0
+      --port=80
 
   # ── Virtual Browser (Chromium) ──────────────────────────────────────
   # Full Chromium browser via noVNC — browse manually & use Video DownloadHelper
