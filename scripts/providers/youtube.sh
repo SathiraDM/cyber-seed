@@ -43,6 +43,7 @@ download() {
     local output_dir="$2"
     local log_file="${3:-/dev/stderr}"
     local fmt="${YT_FORMAT:-best}"
+    local fmt_norm="${fmt%p}"  # normalise: strip trailing 'p' so "1080p" and "1080" both work
 
     echo "[youtube] Downloading: $url"
     echo "[youtube] Format: $fmt"
@@ -52,18 +53,24 @@ download() {
 
     # Build format flags as an array to avoid word-splitting issues
     local -a fmt_flags
-    case "$fmt" in
-        2160p) fmt_flags=(--format 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' --merge-output-format mp4) ;;
-        1080p) fmt_flags=(--format 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best' --merge-output-format mp4) ;;
-        720p)  fmt_flags=(--format 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best'   --merge-output-format mp4) ;;
-        480p)  fmt_flags=(--format 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best'   --merge-output-format mp4) ;;
-        360p)  fmt_flags=(--format 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best'   --merge-output-format mp4) ;;
+    case "$fmt_norm" in
+        2160) fmt_flags=(--format 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best' --merge-output-format mp4) ;;
+        1080) fmt_flags=(--format 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best' --merge-output-format mp4) ;;
+        720)  fmt_flags=(--format 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best'   --merge-output-format mp4) ;;
+        480)  fmt_flags=(--format 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best'   --merge-output-format mp4) ;;
+        360)  fmt_flags=(--format 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best'   --merge-output-format mp4) ;;
         audio) fmt_flags=(--format 'bestaudio/best' --extract-audio --audio-format mp3 --audio-quality 0) ;;
         *)     fmt_flags=(--format 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best' --merge-output-format mp4) ;;
     esac
 
+    # Include quality tag in filename for fixed-quality video downloads
+    local quality_suffix=""
+    case "$fmt_norm" in
+        2160|1080|720|480|360) quality_suffix=" [${fmt_norm}p]" ;;
+    esac
+
     yt-dlp \
-        --output "$output_dir/%(title)s.%(ext)s" \
+        --output "$output_dir/%(title)s${quality_suffix}.%(ext)s" \
         "${fmt_flags[@]}" \
         --trim-filenames 200 \
         --embed-subs \

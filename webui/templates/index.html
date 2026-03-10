@@ -248,7 +248,8 @@ function renderJobs(jobs) {
     var pct = j.download_pct || 0;
     var isUploading = j.status === 'uploading';
     var isActive = ['running','downloading','processing','queued','pending','uploading'].indexOf(j.status) >= 0;
-    var title = j.name || j.url;
+    var hasName = j.name && j.name !== j.url;
+    var title = hasName ? j.name : j.url;
     var meta = j.metadata || {};
     var srcMap = {yt:'YT',nm:'NM',fh:'FH',direct:'Direct',fb:'FB',vim:'VIM',tw:'TW',ig:'IG',tt:'TT',twi:'TWI'};
     var srcLabel = srcMap[j.source] || j.source.toUpperCase();
@@ -261,7 +262,9 @@ function renderJobs(jobs) {
     if (meta.studio) html += '<span class="text-[10px] text-purple-400">' + meta.studio + '</span>';
     html += '</div>';
     html += '<p class="text-sm text-white font-medium truncate" title="' + title + '">' + title + '</p>';
-    html += '<p class="text-[11px] text-gray-500 truncate mt-0.5">' + j.url + '</p>';
+    if (hasName) {
+      html += '<a href="' + j.url + '" target="_blank" rel="noopener" class="text-[11px] text-gray-600 hover:text-gray-400 truncate mt-0.5 block transition">' + j.url + '</a>';
+    }
     if (meta.models && meta.models.length) html += '<p class="text-[10px] text-gray-500 mt-1">&#x1F464; ' + meta.models.join(', ') + '</p>';
     html += '</div>';
     html += '<div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">';

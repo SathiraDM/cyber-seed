@@ -197,6 +197,7 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
             env_list.append(f"FORCE_PROVIDER={provider}")
         exec_id = docker_client.api.exec_create(container.id, cmd, environment=env_list)["Id"]
         stream = docker_client.api.exec_start(exec_id, stream=True)
+        name_resolved = bool(name)  # True if user gave a custom name — don't override
         with open(log_path, "a") as f:
             for chunk in stream:
                 if chunk:
@@ -213,6 +214,33 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
                         prog = parse_ytdlp_progress(line) or parse_aria2_progress(line)
                         if prog:
                             db.update_job(job_id, **prog)
+                        # Detect output filename so the UI shows the real file name
+                        # instead of the raw URL while the job is running / after done.
+                        if not name_resolved:
+                            detected = None
+                            # yt-dlp final merged file (highest priority — definitive name)
+                            m = re.search(r'\[(?:Merger|ffmpeg)\] Merging formats into "(.+)"', line)
+                            if m:
+                                detected = os.path.basename(m.group(1).strip())
+                                name_resolved = True  # won't see a better name after this
+                            # yt-dlp single-file download destination
+                            elif '[download] Destination:' in line:
+                                m = re.search(r'\[download\] Destination: (.+)', line)
+                                if m:
+                                    detected = os.path.basename(m.group(1).strip())
+                            # direct provider — early filename echo
+                            elif '[direct] Filename:' in line:
+                                m = re.search(r'\[direct\] Filename: (.+)', line)
+                                if m:
+                                    detected = os.path.basename(m.group(1).strip())
+                            # direct provider — completion echo
+                            elif '[direct] Download complete:' in line:
+                                m = re.search(r'\[direct\] Download complete: (.+)', line)
+                                if m:
+                                    detected = os.path.basename(m.group(1).strip())
+                                    name_resolved = True
+                            if detected:
+                                db.update_job(job_id, name=detected)
         exit_code = docker_client.api.exec_inspect(exec_id)["ExitCode"]
         if exit_code == 0:
             db.update_job(job_id, status="done", download_pct=100, ended_at=datetime.utcnow().isoformat())
@@ -545,7 +573,8 @@ def fh_resolve():
 
     safe_name = re.sub(r'[^\w\s\-.]', '', title)[:200].strip() or "faphouse_video"
     if quality:
-        safe_name = f"{safe_name} [{quality}]"
+        q_tag = f"{quality}p" if quality.isdigit() else quality
+        safe_name = f"{safe_name} [{q_tag}]"
     safe_name += ".mp4"
     info_name  = safe_name[:-4] + ".info.json"
 
