@@ -187,15 +187,22 @@ def parse_ytdlp_progress(line):
         frag_num, frag_tot = m.group(5), m.group(6)
         if frag_num and frag_tot and int(frag_tot) > 0:
             pct = round(int(frag_num) / int(frag_tot) * 100, 1)
+            # Show stable frag counter instead of the wildly fluctuating ~ estimate
+            size_label = f"frag {frag_num}/{frag_tot}"
         else:
             pct = float(m.group(1))
+            size_label = m.group(2).strip()
         eta = m.group(4).strip()
-        return {"download_pct": pct, "file_size": m.group(2).strip(),
+        return {"download_pct": pct, "file_size": size_label,
                 "speed": m.group(3).strip(), "eta": "" if eta == "Unknown" else eta}
     m2 = re.search(r'\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+/s)', line)
     if m2:
         return {"download_pct": float(m2.group(1)), "file_size": m2.group(2).strip(),
                 "speed": m2.group(3).strip()}
+    # Final summary line: [download] 100% of  699.89MiB in 00:03:30 at 3.33MiB/s
+    m3 = re.search(r'\[download\] 100% of\s+([\d.]+\s*\w+)\s+in\s+(\S+)\s+at\s+([\d.]+\s*\w+/s)', line)
+    if m3:
+        return {"download_pct": 100.0, "file_size": m3.group(1).strip(), "speed": m3.group(3).strip(), "eta": ""}
     if "[download] 100%" in line:
         return {"download_pct": 100.0}
     return None
