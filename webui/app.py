@@ -203,8 +203,10 @@ def parse_ytdlp_progress(line):
     m3 = re.search(r'\[download\] 100% of\s+([\d.]+\s*\w+)\s+in\s+(\S+)\s+at\s+([\d.]+\s*\w+/s)', line)
     if m3:
         return {"download_pct": 100.0, "file_size": m3.group(1).strip(), "speed": m3.group(3).strip(), "eta": ""}
-    if "[download] 100%" in line:
-        return {"download_pct": 100.0}
+    # Do NOT use a broad "[download] 100%" fallback here — yt-dlp HLS prints
+    # that line for every individual fragment completion, which would make the
+    # UI flash 100% → 0% → 100% repeatedly. Only the summary regex above
+    # (which includes "in XX:XX at") is the true end-of-file line.
     return None
 
 def parse_rclone_progress(line):
