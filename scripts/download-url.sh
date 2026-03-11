@@ -71,7 +71,7 @@ find_provider() {
             echo "$forced"
             return 0
         else
-            log "WARNING: FORCE_PROVIDER='${FORCE_PROVIDER}' not found at $forced, falling back to auto-detect"
+            echo "[$(timestamp)] WARNING: FORCE_PROVIDER='${FORCE_PROVIDER}' not found at $forced, falling back to auto-detect" | tee -a "$LOG_FILE" >&2
         fi
     fi
     for provider_file in "${PROVIDER_FILES[@]}"; do

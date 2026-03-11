@@ -180,11 +180,19 @@ threading.Thread(target=_start_orphan_recovery, daemon=True).start()
 # ── Progress parsing ──────────────────────────────────────────────────
 
 def parse_ytdlp_progress(line):
-    m = re.search(r'\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+/s)\s+ETA\s+(\S+)', line)
+    # HLS format: [download]   0.4% of ~ 843.97MiB at    3.03MiB/s ETA 04:21 (frag 2/437)
+    # Note: there is a space between '~' and the size, hence ~?\s* .
+    m = re.search(r'\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+/s)\s+ETA\s+(\S+)(?:.*\(frag\s+(\d+)/(\d+)\))?', line)
     if m:
-        return {"download_pct": float(m.group(1)), "file_size": m.group(2).strip(),
-                "speed": m.group(3).strip(), "eta": m.group(4).strip()}
-    m2 = re.search(r'\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+/s)', line)
+        frag_num, frag_tot = m.group(5), m.group(6)
+        if frag_num and frag_tot and int(frag_tot) > 0:
+            pct = round(int(frag_num) / int(frag_tot) * 100, 1)
+        else:
+            pct = float(m.group(1))
+        eta = m.group(4).strip()
+        return {"download_pct": pct, "file_size": m.group(2).strip(),
+                "speed": m.group(3).strip(), "eta": "" if eta == "Unknown" else eta}
+    m2 = re.search(r'\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+/s)', line)
     if m2:
         return {"download_pct": float(m2.group(1)), "file_size": m2.group(2).strip(),
                 "speed": m2.group(3).strip()}
@@ -224,6 +232,24 @@ def parse_aria2_progress(line):
         return {"download_pct": float(m.group(1)), "speed": m.group(2) + "/s", "eta": m.group(3) or ""}
     return None
 
+
+def _emit_progress(job_id):
+    """Push current job state to all connected WebSocket clients immediately."""
+    try:
+        j = db.get_job(job_id)
+        if j:
+            socketio.emit("job_update", {
+                "id": j["id"], "status": j["status"],
+                "download_pct": j.get("download_pct") or 0,
+                "upload_pct":   j.get("upload_pct")   or 0,
+                "speed":        j.get("speed")        or "",
+                "eta":          j.get("eta")          or "",
+                "file_size":    j.get("file_size")    or "",
+                "name":         j.get("name")         or "",
+            })
+    except Exception:
+        pass
+
 # ── Source detection ──────────────────────────────────────────────────
 
 _SOURCE_PATTERNS = [
@@ -262,7 +288,7 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
             cmd.append(name)
         env_list = [f"YT_FORMAT={fmt}"]
         # Map short source codes to provider script names
-        _provider_map = {"yt": "youtube", "fb": "facebook", "nm": "noodlemagazine", "direct": "direct"}
+        _provider_map = {"yt": "youtube", "fb": "facebook", "nm": "noodlemagazine", "direct": "direct", "fh": "youtube"}
         if source and source not in ("auto", ""):
             provider = _provider_map.get(source, source)
             env_list.append(f"FORCE_PROVIDER={provider}")
@@ -281,10 +307,12 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
                         rclone = parse_rclone_progress(line)
                         if rclone:
                             db.update_job(job_id, status="uploading", **rclone)
+                            _emit_progress(job_id)
                             continue
                         prog = parse_ytdlp_progress(line) or parse_aria2_progress(line)
                         if prog:
                             db.update_job(job_id, **prog)
+                            _emit_progress(job_id)
                         # Detect output filename so the UI shows the real file name
                         # instead of the raw URL while the job is running / after done.
                         if not name_resolved:
@@ -364,10 +392,47 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                         prog = parse_ytdlp_progress(line)
                         if prog:
                             db.update_job(job_id, **prog)
+                            _emit_progress(job_id)
         exit_code = docker_client.api.exec_inspect(exec_id)["ExitCode"]
         if exit_code == 0:
-            db.update_job(job_id, status="done", download_pct=100, ended_at=datetime.utcnow().isoformat())
             _log(f"Download complete: {safe_name}")
+            # Upload via rclone
+            try:
+                c_info = docker_client.api.inspect_container(container.id)
+                env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
+                rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
+                remote      = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
+                remote_path = env_dict.get("WEBDL_PATH", "/WebDownloads")
+                db.update_job(job_id, status="uploading", upload_pct=0)
+                _emit_progress(job_id)
+                _log(f"Uploading \u2192 {remote}:{remote_path}/faphouse/")
+                rclone_cmd = ["rclone", "copy",
+                              f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                              f"{remote}:{remote_path}/faphouse",
+                              "--config", rclone_conf,
+                              "--use-json-log", "--stats=2s", "-v"]
+                up_exec = docker_client.api.exec_create(container.id, rclone_cmd)["Id"]
+                up_stream = docker_client.api.exec_start(up_exec, stream=True)
+                with open(log_path, "a") as f:
+                    for chunk in up_stream:
+                        if chunk:
+                            text = chunk.decode("utf-8", errors="replace")
+                            f.write(text); f.flush()
+                            for line in text.splitlines():
+                                rp = parse_rclone_progress(line)
+                                if rp:
+                                    db.update_job(job_id, status="uploading", **rp)
+                                    _emit_progress(job_id)
+                up_exit = docker_client.api.exec_inspect(up_exec)["ExitCode"]
+                if up_exit == 0:
+                    _log("Upload complete.")
+                else:
+                    _log(f"Upload failed (exit {up_exit})")
+            except Exception as ue:
+                _log(f"Upload skipped: {ue}")
+            db.update_job(job_id, status="done", download_pct=100,
+                          ended_at=datetime.utcnow().isoformat())
+            _emit_progress(job_id)
         else:
             db.update_job(job_id, status="failed", ended_at=datetime.utcnow().isoformat(), error=f"yt-dlp exit {exit_code}")
             _log(f"yt-dlp exited with code {exit_code}")
