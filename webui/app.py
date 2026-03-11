@@ -419,6 +419,9 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                               f"/downloads/faphouse/{safe_name[:-4]}.mp4",
                               f"{remote}:{remote_path}/faphouse",
                               "--config", rclone_conf,
+                              "--retries", "10",
+                              "--low-level-retries", "20",
+                              "--no-check-dest",
                               "--use-json-log", "--stats=2s", "-v"]
                 up_exec = docker_client.api.exec_create(container.id, rclone_cmd)["Id"]
                 up_stream = docker_client.api.exec_start(up_exec, stream=True)

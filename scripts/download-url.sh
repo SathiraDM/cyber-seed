@@ -99,8 +99,9 @@ upload_to_onedrive() {
         --exclude '*.png.webp' \
         --transfers=4 \
         --checkers=8 \
-        --retries=3 \
-        --low-level-retries=10 \
+        --retries=10 \
+        --low-level-retries=20 \
+        --no-check-dest \
         --stats=5s \
         --stats-one-line \
         --verbose \
