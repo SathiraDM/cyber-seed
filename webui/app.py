@@ -399,12 +399,12 @@ def _generate_contact_sheet(container, video_path, output_path, log_fn,
     rows = n_scenes // cols
     cmd = [
         "vcsi", video_path,
-        "-t", str(n_scenes),
+        "-s", str(n_scenes),
         "-g", f"{cols}x{rows}",
         "--start-delay-percent", "5",
         "--end-delay-percent",   "5",
-        "--width",               "1920",
-        "--jpeg-quality",        "90",
+        "-w",                    "1920",
+        "--quality",             "90",
         "-o", output_path,
     ]
     result = container.exec_run(cmd)
@@ -509,10 +509,11 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 db.update_job(job_id, status="uploading", upload_pct=0)
                 _emit_progress(job_id)
                 _log(f"Uploading → OneDrive {od_dest}/")
+                _rclone_stem = safe_name[:-4].replace('[', '\\[').replace(']', '\\]')
                 od_cmd = ["rclone", "copy",
                           "/downloads/faphouse/",
                           od_dest,
-                          "--include", f"{safe_name[:-4]}.*",
+                          "--include", f"{_rclone_stem}.*",
                           "--config", rclone_conf,
                           "--retries", "10",
                           "--low-level-retries", "20",
@@ -541,7 +542,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_cmd = ["rclone", "copy",
                            "/downloads/faphouse/",
                            gcs_dest,
-                           "--include", f"{safe_name[:-4]}.*",
+                           "--include", f"{_rclone_stem}.*",
                            "--config", rclone_conf,
                            "--retries", "10",
                            "--low-level-retries", "20",
