@@ -137,6 +137,7 @@ async function processItem(item) {
       views:     result.views     || '',
       published: result.published || '',
       is_hls:    result.isHls    || false,
+      thumbnail_url: result.thumbnailUrl || '',
       source_url: item.url,
     }),
   });
@@ -211,12 +212,16 @@ async function extractVideoData() {
       document.querySelector('[class*="date"], [class*="publish"]')?.textContent
         ?.replace(/^published[:\s]*/i, '').trim() || '';
 
+    const thumbnailUrl = document.querySelector('meta[property="og:image"]')?.getAttribute('content')
+      || playerEl?.getAttribute('data-el-poster-url')
+      || '';
+
     const meta = { title, models, studio, tags, duration, views, published };
 
     // ── HLS stream URL (full video) ──
     const hlsUrl = document.querySelector('[data-el-hls-url]')?.getAttribute('data-el-hls-url');
     if (hlsUrl) {
-      return { cdnUrl: hlsUrl, quality: '1080', isHls: true, ...meta };
+      return { cdnUrl: hlsUrl, quality: '1080', isHls: true, thumbnailUrl, ...meta };
     }
 
     return { error: 'No HLS URL found — make sure you are logged in with a premium faphouse account', ...meta };

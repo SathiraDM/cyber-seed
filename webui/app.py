@@ -382,6 +382,37 @@ def run_download_job(job_id, url, name="", fmt="best", source="auto"):
         db.update_job(job_id, status="failed", ended_at=datetime.utcnow().isoformat(), error=str(e))
 
 
+def _generate_contact_sheet(container, video_path, output_path, log_fn,
+                             n_scenes=32, cols=4):
+    """
+    Generate an N-scene contact sheet using vcsi.
+    vcsi handles: duration probe, even frame sampling, any aspect ratio
+    (letterbox/pillarbox), timestamps on each tile, metadata header.
+    Layout: cols × (n_scenes // cols) grid, total width 1920 px.
+    Skips first and last 5% of the video to avoid intros/black frames.
+    Returns True on success.
+    """
+    rows = n_scenes // cols
+    cmd = [
+        "vcsi", video_path,
+        "-t", str(n_scenes),
+        "-g", f"{cols}x{rows}",
+        "--start-delay-percent", "5",
+        "--end-delay-percent",   "5",
+        "--width",               "1920",
+        "--jpeg-quality",        "90",
+        "-o", output_path,
+    ]
+    result = container.exec_run(cmd)
+    if result.exit_code == 0:
+        log_fn(f"Contact sheet generated: {output_path.split('/')[-1]}")
+        return True
+    else:
+        err = result.output.decode("utf-8", errors="replace")[-300:] if result.output else ""
+        log_fn(f"Contact sheet failed (exit {result.exit_code}): {err}")
+        return False
+
+
 def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
     log_path = JOBS_DIR / f"{job_id}.log"
     db.update_job(job_id, status="downloading", started_at=datetime.utcnow().isoformat())
@@ -427,6 +458,35 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
         exit_code = docker_client.api.exec_inspect(exec_id)["ExitCode"]
         if exit_code == 0:
             _log(f"Download complete: {safe_name}")
+            # Download thumbnail
+            thumb_name = None
+            thumbnail_url = info_payload.get("thumbnail_url", "")
+            if thumbnail_url:
+                try:
+                    ext = thumbnail_url.split("?")[0].rsplit(".", 1)[-1].lower()
+                    if ext not in ("jpg", "jpeg", "png", "webp"):
+                        ext = "jpg"
+                    thumb_name = safe_name[:-4] + f".{ext}"
+                    _log(f"Downloading thumbnail: {thumb_name}")
+                    t_result = container.exec_run(
+                        ["wget", "-q", "-O", f"/downloads/faphouse/{thumb_name}", thumbnail_url]
+                    )
+                    if t_result.exit_code != 0:
+                        _log(f"Thumbnail download failed (exit {t_result.exit_code})")
+                        thumb_name = None
+                    else:
+                        _log("Thumbnail downloaded.")
+                except Exception as te:
+                    _log(f"Thumbnail download error: {te}")
+                    thumb_name = None
+            # Generate contact sheet
+            sheet_name = None
+            _sheet_out = f"/downloads/faphouse/{safe_name[:-4]}.preview.jpg"
+            if _generate_contact_sheet(
+                    container,
+                    f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                    _sheet_out, _log):
+                sheet_name = safe_name[:-4] + ".preview.jpg"
             # Upload via rclone
             try:
                 c_info = docker_client.api.inspect_container(container.id)
@@ -460,6 +520,36 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 up_exit = docker_client.api.exec_inspect(up_exec)["ExitCode"]
                 if up_exit == 0:
                     _log("Upload complete.")
+                    # Upload thumbnail if present
+                    if thumb_name:
+                        try:
+                            th_cmd = ["rclone", "copy",
+                                      f"/downloads/faphouse/{thumb_name}",
+                                      f"{remote}:{remote_path}/faphouse",
+                                      "--config", rclone_conf,
+                                      "--retries", "10",
+                                      "--low-level-retries", "20",
+                                      "--no-check-dest"]
+                            th_exec = docker_client.api.exec_create(container.id, th_cmd)["Id"]
+                            docker_client.api.exec_start(th_exec, stream=False)
+                            _log("Thumbnail uploaded.")
+                        except Exception as the_:
+                            _log(f"Thumbnail upload error: {the_}")
+                    # Upload contact sheet if present
+                    if sheet_name:
+                        try:
+                            sh_cmd = ["rclone", "copy",
+                                      f"/downloads/faphouse/{sheet_name}",
+                                      f"{remote}:{remote_path}/faphouse",
+                                      "--config", rclone_conf,
+                                      "--retries", "10",
+                                      "--low-level-retries", "20",
+                                      "--no-check-dest"]
+                            sh_exec = docker_client.api.exec_create(container.id, sh_cmd)["Id"]
+                            docker_client.api.exec_start(sh_exec, stream=False)
+                            _log("Contact sheet uploaded.")
+                        except Exception as she_:
+                            _log(f"Contact sheet upload error: {she_}")
                 else:
                     _log(f"Upload failed (exit {up_exit})")
             except Exception as ue:
@@ -741,7 +831,8 @@ def fh_resolve():
     duration   = data.get("duration", "")
     views      = data.get("views", "")
     published  = data.get("published", "")
-    source_url = data.get("source_url", "")
+    source_url    = data.get("source_url", "")
+    thumbnail_url = data.get("thumbnail_url", "")
 
     if not cdn_url:
         return jsonify({"error": "No cdn_url"}), 400
@@ -756,7 +847,8 @@ def fh_resolve():
     metadata = {"title": title, "source_url": source_url, "models": models,
                 "studio": studio, "tags": tags, "duration": duration,
                 "views": views, "published": published, "quality": quality,
-                "cdn_url": cdn_url, "downloaded_at": datetime.utcnow().isoformat()}
+                "cdn_url": cdn_url, "thumbnail_url": thumbnail_url,
+                "downloaded_at": datetime.utcnow().isoformat()}
 
     db.update_job(item_id, status="downloading", name=safe_name, metadata=metadata)
     threading.Thread(target=run_fh_download,
