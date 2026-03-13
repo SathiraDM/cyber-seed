@@ -487,19 +487,20 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                     f"/downloads/faphouse/{safe_name[:-4]}.mp4",
                     _sheet_out, _log):
                 sheet_name = safe_name[:-4] + ".preview.jpg"
-            # Upload via rclone
+            # Upload MP4 to GCS Coldline — JSON + contact sheet + thumbnail stay local
             try:
                 c_info = docker_client.api.inspect_container(container.id)
                 env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
                 rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
-                remote      = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
-                remote_path = env_dict.get("WEBDL_PATH", "/WebDownloads")
+                gcs_remote  = env_dict.get("GCS_REMOTE", "gcs")
+                gcs_bucket  = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
+                gcs_dest    = f"{gcs_remote}:{gcs_bucket}/faphouse"
                 db.update_job(job_id, status="uploading", upload_pct=0)
                 _emit_progress(job_id)
-                _log(f"Uploading \u2192 {remote}:{remote_path}/faphouse/")
+                _log(f"Uploading MP4 \u2192 {gcs_dest}/")
                 rclone_cmd = ["rclone", "copy",
                               f"/downloads/faphouse/{safe_name[:-4]}.mp4",
-                              f"{remote}:{remote_path}/faphouse",
+                              gcs_dest,
                               "--config", rclone_conf,
                               "--retries", "10",
                               "--low-level-retries", "20",
@@ -519,41 +520,15 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                                     _emit_progress(job_id)
                 up_exit = docker_client.api.exec_inspect(up_exec)["ExitCode"]
                 if up_exit == 0:
-                    _log("Upload complete.")
-                    # Upload thumbnail if present
-                    if thumb_name:
-                        try:
-                            th_cmd = ["rclone", "copy",
-                                      f"/downloads/faphouse/{thumb_name}",
-                                      f"{remote}:{remote_path}/faphouse",
-                                      "--config", rclone_conf,
-                                      "--retries", "10",
-                                      "--low-level-retries", "20",
-                                      "--no-check-dest"]
-                            th_exec = docker_client.api.exec_create(container.id, th_cmd)["Id"]
-                            docker_client.api.exec_start(th_exec, stream=False)
-                            _log("Thumbnail uploaded.")
-                        except Exception as the_:
-                            _log(f"Thumbnail upload error: {the_}")
-                    # Upload contact sheet if present
-                    if sheet_name:
-                        try:
-                            sh_cmd = ["rclone", "copy",
-                                      f"/downloads/faphouse/{sheet_name}",
-                                      f"{remote}:{remote_path}/faphouse",
-                                      "--config", rclone_conf,
-                                      "--retries", "10",
-                                      "--low-level-retries", "20",
-                                      "--no-check-dest"]
-                            sh_exec = docker_client.api.exec_create(container.id, sh_cmd)["Id"]
-                            docker_client.api.exec_start(sh_exec, stream=False)
-                            _log("Contact sheet uploaded.")
-                        except Exception as she_:
-                            _log(f"Contact sheet upload error: {she_}")
+                    _log("GCS upload complete.")
+                    # Delete local MP4 — it's now safely in GCS
+                    container.exec_run(["rm", "-f", f"/downloads/faphouse/{safe_name[:-4]}.mp4"])
+                    _log("Local MP4 removed (archived to GCS).")
+                    # JSON, thumbnail, contact sheet remain on VM attached disk
                 else:
-                    _log(f"Upload failed (exit {up_exit})")
+                    _log(f"GCS upload failed (exit {up_exit}) — local MP4 kept")
             except Exception as ue:
-                _log(f"Upload skipped: {ue}")
+                _log(f"GCS upload skipped: {ue}")
             db.update_job(job_id, status="done", download_pct=100,
                           ended_at=datetime.utcnow().isoformat())
             _emit_progress(job_id)

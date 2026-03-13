@@ -19,6 +19,9 @@ services:
       - ONEDRIVE_PATH=${ONEDRIVE_PATH:-/Torrents}
       # Target folder for web/URL downloads (separate from torrents)
       - WEBDL_PATH=${WEBDL_PATH:-/WebDownloads}
+      # GCS Coldline bucket for FapHouse video archival
+      - GCS_REMOTE=${GCS_REMOTE:-gcs}
+      - GCS_BUCKET=${GCS_BUCKET:-cyberseed-bucket-01}
       # qBittorrent Web UI password (set during setup.sh, hashed by init-qbt.sh)
       - QBT_WEBUI_PASS=${QBT_WEBUI_PASS:-}
     volumes:
