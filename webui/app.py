@@ -524,14 +524,15 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 od_exit = docker_client.api.exec_inspect(od_exec)["ExitCode"]
                 _log("OneDrive upload complete." if od_exit == 0 else f"OneDrive upload failed (exit {od_exit})")
 
-                # ── 2. GCS Coldline — MP4 only ────────────────────────────
+                # ── 2. GCS Coldline — MP4 + JSON + thumbnail + contact sheet ──
                 gcs_remote = env_dict.get("GCS_REMOTE", "gcs")
                 gcs_bucket = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
                 gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{safe_name[:-4]}"
-                _log(f"Uploading MP4 → GCS {gcs_dest}/")
+                _log(f"Uploading → GCS {gcs_dest}/")
                 gcs_cmd = ["rclone", "copy",
-                           f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                           "/downloads/faphouse/",
                            gcs_dest,
+                           "--include", f"{safe_name[:-4]}.*",
                            "--config", rclone_conf,
                            "--retries", "10",
                            "--low-level-retries", "20",
