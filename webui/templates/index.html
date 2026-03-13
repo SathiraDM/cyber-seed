@@ -296,7 +296,8 @@ function buildProgressHtml(j) {
   var displayPct = isUploading ? (j.upload_pct || 0) : (j.download_pct || 0);
   // Don't show 100% while still downloading — thumbnail/upload work remains
   if (!isUploading && j.status !== 'done' && displayPct >= 100) displayPct = 99.9;
-  var label = isUploading ? '&#x2B06; Uploading' : (j.status === 'downloading' || j.status === 'running' ? '&#x2B07; Downloading' : '&#x23F3; Waiting...');
+  var uploadDest = (j.upload_status || 'OneDrive');
+  var label = isUploading ? ('&#x2B06; ' + uploadDest) : (j.status === 'downloading' || j.status === 'running' ? '&#x2B07; Downloading' : '&#x23F3; Waiting...');
   var barColor = isUploading ? 'bg-cs-green' : (j.status === 'downloading' || j.status === 'running' ? 'bg-cs-accent' : 'bg-gray-600');
   var info;
   if (isHLS) {
@@ -308,11 +309,15 @@ function buildProgressHtml(j) {
     // ffmpeg HLS mode: show downloaded size + speed, no percentage
     info = j.file_size; // '54.5 MiB'
     if (j.speed) info += ' &#x2022; ' + j.speed;
+  } else if (isUploading) {
+    info = displayPct.toFixed(1) + '%';
+    if (j.speed) info += ' &#x2022; ' + j.speed;
+    if (j.eta && j.eta !== 'Unknown') info += ' &#x2022; ETA ' + j.eta;
   } else {
     info = displayPct.toFixed(1) + '%';
     if (j.speed) info += ' &#x2022; ' + j.speed;
     if (j.eta && j.eta !== 'Unknown') info += ' &#x2022; ETA ' + j.eta;
-    if (!isUploading && j.file_size) info += ' &#x2022; ' + j.file_size;
+    if (j.file_size) info += ' &#x2022; ' + j.file_size;
   }
   // For ffmpeg mode, show a full-width pulsing bar (indeterminate) since pct is unavailable
   var barStyle = isFFmpeg

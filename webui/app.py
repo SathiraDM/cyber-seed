@@ -275,6 +275,7 @@ def _emit_progress(job_id):
                 "id": j["id"], "status": j["status"],
                 "download_pct": j.get("download_pct") or 0,
                 "upload_pct":   j.get("upload_pct")   or 0,
+                "upload_status": j.get("upload_status") or "",
                 "speed":        j.get("speed")        or "",
                 "eta":          j.get("eta")          or "",
                 "file_size":    j.get("file_size")    or "",
@@ -506,7 +507,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 od_remote  = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
                 od_path    = env_dict.get("WEBDL_PATH", "/WebDownloads")
                 od_dest    = f"{od_remote}:{od_path}/faphouse/{safe_name[:-4]}"
-                db.update_job(job_id, status="uploading", upload_pct=0)
+                db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
                 _emit_progress(job_id)
                 _log(f"Uploading → OneDrive {od_dest}/")
                 _rclone_stem = safe_name[:-4].replace('[', '\\[').replace(']', '\\]')
@@ -538,6 +539,8 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_remote = env_dict.get("GCS_REMOTE", "gcs")
                 gcs_bucket = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
                 gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{safe_name[:-4]}"
+                db.update_job(job_id, upload_pct=0, upload_status="GCS")
+                _emit_progress(job_id)
                 _log(f"Uploading → GCS {gcs_dest}/")
                 gcs_cmd = ["rclone", "copy",
                            "/downloads/faphouse/",
@@ -563,12 +566,10 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_exit = docker_client.api.exec_inspect(gcs_exec)["ExitCode"]
                 if gcs_exit == 0:
                     _log("GCS upload complete.")
-                    # Move MP4 to #moved — JSON/thumbnail/contact sheet stay in place permanently
-                    container.exec_run(["mkdir", "-p", "/downloads/faphouse/#moved"])
-                    container.exec_run(["mv",
-                                        f"/downloads/faphouse/{safe_name[:-4]}.mp4",
-                                        f"/downloads/faphouse/#moved/{safe_name[:-4]}.mp4"])
-                    _log(f"MP4 moved to #moved/ (archived to GCS).")
+                    # Delete MP4 — JSON/thumbnail/contact sheet stay on disk permanently
+                    container.exec_run(["rm", "-f",
+                                        f"/downloads/faphouse/{safe_name[:-4]}.mp4"])
+                    _log(f"MP4 deleted (safely archived to GCS).")
                 else:
                     _log(f"GCS upload failed (exit {gcs_exit}) — MP4 kept in place")
             except Exception as ue:
