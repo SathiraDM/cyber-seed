@@ -546,6 +546,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                            "/downloads/faphouse/",
                            gcs_dest,
                            "--include", f"{_rclone_stem}.*",
+                           "--gcs-bucket-policy-only",
                            "--config", rclone_conf,
                            "--retries", "10",
                            "--low-level-retries", "20",
