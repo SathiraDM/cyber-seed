@@ -211,8 +211,26 @@ def parse_ytdlp_progress(line):
             return {"download_pct": 100.0, "file_size": m3.group(1).strip(), "speed": m3.group(3).strip(), "eta": ""}
     return None
 
+
+def parse_ffmpeg_progress(line):
+    # ffmpeg stderr stats: size=   54528kB time=00:04:32.00 bitrate=1641.9kbits/s speed=4.28x
+    m = re.search(r'size=\s*(\d+)kB\s+time=(\S+)\s+bitrate=\s*([\d.]+)(\w+bits/s)\s+speed=\s*([\d.]+)x', line)
+    if m:
+        size_mib = round(int(m.group(1)) / 1024, 1)
+        bitrate_val = float(m.group(3))
+        unit = m.group(4).lower()
+        if unit.startswith('m'):
+            bits_per_sec = bitrate_val * 1_000_000
+        elif unit.startswith('k'):
+            bits_per_sec = bitrate_val * 1_000
+        else:
+            bits_per_sec = bitrate_val
+        speed_mib = round(bits_per_sec / 8 / 1_048_576, 2)
+        return {"file_size": f"{size_mib} MiB", "speed": f"{speed_mib} MiB/s"}
+    return None
+
+
 def parse_rclone_progress(line):
-    """Parse rclone JSON log line for upload progress."""
     if '"level"' not in line and '"stats"' not in line:
         return None
     try:
@@ -390,7 +408,9 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
                "--merge-output-format", "mp4",
                "-o", f"/downloads/faphouse/{safe_name[:-4]}.mp4",
-               "--no-part", cdn_url]
+               "--downloader", "ffmpeg",
+               "--hls-use-mpegts",
+               cdn_url]
         exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
         stream = docker_client.api.exec_start(exec_id, stream=True)
         with open(log_path, "a") as f:
@@ -400,7 +420,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                     f.write(text)
                     f.flush()
                     for line in text.splitlines():
-                        prog = parse_ytdlp_progress(line)
+                        prog = parse_ytdlp_progress(line) or parse_ffmpeg_progress(line)
                         if prog:
                             db.update_job(job_id, **prog)
                             _emit_progress(job_id)

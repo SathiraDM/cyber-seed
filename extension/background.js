@@ -66,10 +66,11 @@ async function pollQueue() {
     const queue = await apiFetch('/api/faphouse/queue');
     if (!queue || !queue.length) return;
 
-    for (const item of queue) {
+    // Process all pending items in parallel — each opens its own tab simultaneously
+    await Promise.all(queue.map(item => {
       console.log('[cyberseed] Processing:', item.url);
-      await processItem(item);
-    }
+      return processItem(item);
+    }));
   } catch (e) {
     console.error('[cyberseed] poll error:', e);
   } finally {
