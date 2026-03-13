@@ -291,7 +291,8 @@ function buildProgressHtml(j) {
   var isUploading = j.status === 'uploading';
   var isHLS = !isUploading && j.file_size && j.file_size.indexOf('frag') === 0;
   // ffmpeg mode: file_size is like "54.5 MiB" — no fragment count, no stable pct
-  var isFFmpeg = !isUploading && !isHLS && j.file_size && /^\d/.test(j.file_size) && j.file_size.indexOf('MiB') >= 0;
+  // ffmpeg mode: file_size is "54.5 MiB" AND no pct yet (before Duration header parsed)
+  var isFFmpeg = !isUploading && !isHLS && j.file_size && /^\d/.test(j.file_size) && j.file_size.indexOf('MiB') >= 0 && !j.download_pct;
   var displayPct = isUploading ? (j.upload_pct || 0) : (j.download_pct || 0);
   var label = isUploading ? '&#x2B06; Uploading' : (j.status === 'downloading' || j.status === 'running' ? '&#x2B07; Downloading' : '&#x23F3; Waiting...');
   var barColor = isUploading ? 'bg-cs-green' : (j.status === 'downloading' || j.status === 'running' ? 'bg-cs-accent' : 'bg-gray-600');

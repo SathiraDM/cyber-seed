@@ -212,13 +212,14 @@ def parse_ytdlp_progress(line):
     return None
 
 
-def parse_ffmpeg_progress(line):
+def parse_ffmpeg_progress(line, total_secs=None):
     # ffmpeg stderr stats: size=   54528kB time=00:04:32.00 bitrate=1641.9kbits/s speed=4.28x
-    m = re.search(r'size=\s*(\d+)kB\s+time=(\S+)\s+bitrate=\s*([\d.]+)(\w+bits/s)\s+speed=\s*([\d.]+)x', line)
+    m = re.search(r'size=\s*(\d+)kB\s+time=(\d+):(\d+):([\d.]+)\s+bitrate=\s*([\d.]+)(\w+bits/s)\s+speed=\s*([\d.]+)x', line)
     if m:
         size_mib = round(int(m.group(1)) / 1024, 1)
-        bitrate_val = float(m.group(3))
-        unit = m.group(4).lower()
+        cur_secs = int(m.group(2)) * 3600 + int(m.group(3)) * 60 + float(m.group(4))
+        bitrate_val = float(m.group(5))
+        unit = m.group(6).lower()
         if unit.startswith('m'):
             bits_per_sec = bitrate_val * 1_000_000
         elif unit.startswith('k'):
@@ -226,7 +227,10 @@ def parse_ffmpeg_progress(line):
         else:
             bits_per_sec = bitrate_val
         speed_mib = round(bits_per_sec / 8 / 1_048_576, 2)
-        return {"file_size": f"{size_mib} MiB", "speed": f"{speed_mib} MiB/s"}
+        result = {"file_size": f"{size_mib} MiB", "speed": f"{speed_mib} MiB/s"}
+        if total_secs and total_secs > 0:
+            result["download_pct"] = round(min(cur_secs / total_secs * 100, 99.9), 1)
+        return result
     return None
 
 
@@ -444,6 +448,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                cdn_url]
         exec_id = docker_client.api.exec_create(container.id, cmd)["Id"]
         stream = docker_client.api.exec_start(exec_id, stream=True)
+        fh_total_secs = None
         with open(log_path, "a") as f:
             for chunk in stream:
                 if chunk:
@@ -451,7 +456,11 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                     f.write(text)
                     f.flush()
                     for line in text.splitlines():
-                        prog = parse_ytdlp_progress(line) or parse_ffmpeg_progress(line)
+                        if fh_total_secs is None:
+                            dm = re.search(r'Duration:\s+(\d+):(\d+):([\d.]+)', line)
+                            if dm:
+                                fh_total_secs = int(dm.group(1))*3600 + int(dm.group(2))*60 + float(dm.group(3))
+                        prog = parse_ytdlp_progress(line) or parse_ffmpeg_progress(line, fh_total_secs)
                         if prog:
                             db.update_job(job_id, **prog)
                             _emit_progress(job_id)
