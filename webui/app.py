@@ -566,10 +566,23 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_exit = docker_client.api.exec_inspect(gcs_exec)["ExitCode"]
                 if gcs_exit == 0:
                     _log("GCS upload complete.")
-                    # Delete MP4 — JSON/thumbnail/contact sheet stay on disk permanently
+                    # Move JSON + images into #moved/<video-name>/, delete MP4
+                    moved_dir = f"/downloads/faphouse/#moved/{safe_name[:-4]}"
+                    container.exec_run(["mkdir", "-p", moved_dir])
+                    container.exec_run(["mv", "-f",
+                                        f"/downloads/faphouse/{safe_name[:-4]}.info.json",
+                                        moved_dir + "/"])
+                    if thumb_name:
+                        container.exec_run(["mv", "-f",
+                                            f"/downloads/faphouse/{thumb_name}",
+                                            moved_dir + "/"])
+                    if sheet_name:
+                        container.exec_run(["mv", "-f",
+                                            f"/downloads/faphouse/{sheet_name}",
+                                            moved_dir + "/"])
                     container.exec_run(["rm", "-f",
                                         f"/downloads/faphouse/{safe_name[:-4]}.mp4"])
-                    _log(f"MP4 deleted (safely archived to GCS).")
+                    _log(f"Archived to #moved/{safe_name[:-4]}/ — MP4 deleted.")
                 else:
                     _log(f"GCS upload failed (exit {gcs_exit}) — MP4 kept in place")
             except Exception as ue:
