@@ -213,8 +213,8 @@ def parse_ytdlp_progress(line):
 
 
 def parse_ffmpeg_progress(line, total_secs=None):
-    # ffmpeg stderr stats: size=   54528kB time=00:04:32.00 bitrate=1641.9kbits/s speed=4.28x
-    m = re.search(r'size=\s*(\d+)kB\s+time=(\d+):(\d+):([\d.]+)\s+bitrate=\s*([\d.]+)(\w+bits/s)\s+speed=\s*([\d.]+)x', line)
+    # ffmpeg stderr stats: size=  175616KiB time=00:09:56.65 bitrate=2411.2kbits/s speed=45.9x
+    m = re.search(r'size=\s*(\d+)Ki?B\s+time=(\d+):(\d+):([\d.]+)\s+bitrate=\s*([\d.]+)(\w+bits/s)\s+speed=\s*([\d.]+)x', line)
     if m:
         size_mib = round(int(m.group(1)) / 1024, 1)
         cur_secs = int(m.group(2)) * 3600 + int(m.group(3)) * 60 + float(m.group(4))
