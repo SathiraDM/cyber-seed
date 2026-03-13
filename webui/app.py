@@ -496,7 +496,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 # ── 1. OneDrive — upload everything (MP4 + thumbnail + contact sheet + JSON) ──
                 od_remote  = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
                 od_path    = env_dict.get("WEBDL_PATH", "/WebDownloads")
-                od_dest    = f"{od_remote}:{od_path}/faphouse"
+                od_dest    = f"{od_remote}:{od_path}/faphouse/{safe_name[:-4]}"
                 db.update_job(job_id, status="uploading", upload_pct=0)
                 _emit_progress(job_id)
                 _log(f"Uploading → OneDrive {od_dest}/")
@@ -527,7 +527,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 # ── 2. GCS Coldline — MP4 only ────────────────────────────
                 gcs_remote = env_dict.get("GCS_REMOTE", "gcs")
                 gcs_bucket = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
-                gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse"
+                gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{safe_name[:-4]}"
                 _log(f"Uploading MP4 → GCS {gcs_dest}/")
                 gcs_cmd = ["rclone", "copy",
                            f"/downloads/faphouse/{safe_name[:-4]}.mp4",
