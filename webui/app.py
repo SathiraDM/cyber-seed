@@ -82,7 +82,9 @@ def _recover_orphan(job):
     file_found = False
     try:
         if source == "fh":
-            result = container.exec_run(["test", "-f", f"/downloads/faphouse/{name}"])
+            # New layout: MP4 is in #moved/<stem>/
+            _stem = name[:-4] if name.endswith(".mp4") else name
+            result = container.exec_run(["test", "-f", f"/downloads/faphouse/#moved/{_stem}/{name}"])
             file_found = result.exit_code == 0
         elif name:
             result = container.exec_run(["test", "-d", f"/downloads/{name}"])
@@ -92,22 +94,22 @@ def _recover_orphan(job):
 
     if file_found and source == "fh":
         _log("Recovery: download file found — resuming contact sheet + upload.")
-        # Reconstruct variables needed for post-processing
-        safe_name = name  # e.g. "Title [1080p].mp4"
+        safe_name = name
         stem = safe_name[:-4]
-        # Find thumbnail (any image extension)
+        vid_dir = f"/downloads/faphouse/#moved/{stem}"
+        # Find thumbnail
         thumb_name = None
         for ext in ("jpg", "jpeg", "png", "webp"):
-            r = container.exec_run(["test", "-f", f"/downloads/faphouse/{stem}.{ext}"])
+            r = container.exec_run(["test", "-f", f"{vid_dir}/{stem}.{ext}"])
             if r.exit_code == 0:
                 thumb_name = f"{stem}.{ext}"
                 break
         # Generate contact sheet if not already present
         sheet_name = None
-        sheet_path = f"/downloads/faphouse/{stem}.preview.jpg"
+        sheet_path = f"{vid_dir}/{stem}.preview.jpg"
         r = container.exec_run(["test", "-f", sheet_path])
         if r.exit_code != 0:
-            if _generate_contact_sheet(container, f"/downloads/faphouse/{safe_name}",
+            if _generate_contact_sheet(container, f"{vid_dir}/{safe_name}",
                                        sheet_path, _log):
                 sheet_name = f"{stem}.preview.jpg"
         else:
@@ -117,27 +119,13 @@ def _recover_orphan(job):
             c_info = docker_client.api.inspect_container(container.id)
             env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
             rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
-            _rec_files = [safe_name, f"{stem}.info.json"]
-            if thumb_name: _rec_files.append(thumb_name)
-            if sheet_name: _rec_files.append(sheet_name)
-            _rec_bytes = "\n".join(_rec_files).encode("utf-8")
-            _rec_list_name = f"rclone_files_{job_id}.txt"
-            _rec_tar = io.BytesIO()
-            with tarfile.open(fileobj=_rec_tar, mode="w") as _t:
-                _ti2 = tarfile.TarInfo(name=_rec_list_name)
-                _ti2.size = len(_rec_bytes)
-                _t.addfile(_ti2, io.BytesIO(_rec_bytes))
-            _rec_tar.seek(0)
-            container.put_archive("/tmp", _rec_tar.getvalue())
-            _rec_files_from = f"/tmp/{_rec_list_name}"
 
             od_remote = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
             od_path   = env_dict.get("WEBDL_PATH", "/WebDownloads")
             od_dest   = f"{od_remote}:{od_path}/faphouse/{stem}"
             _log(f"Recovery: uploading → OneDrive {od_dest}/")
             db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
-            od_cmd = ["rclone", "copy", "/downloads/faphouse/", od_dest,
-                      "--files-from", _rec_files_from,
+            od_cmd = ["rclone", "copy", vid_dir + "/", od_dest,
                       "--config", rclone_conf, "--retries", "10",
                       "--low-level-retries", "20", "--no-check-dest",
                       "--use-json-log", "--stats=2s", "-v"]
@@ -154,8 +142,7 @@ def _recover_orphan(job):
             gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{stem}"
             _log(f"Recovery: uploading → GCS {gcs_dest}/")
             db.update_job(job_id, upload_pct=0, upload_status="GCS")
-            gcs_cmd = ["rclone", "copy", "/downloads/faphouse/", gcs_dest,
-                       "--files-from", _rec_files_from,
+            gcs_cmd = ["rclone", "copy", vid_dir + "/", gcs_dest,
                        "--gcs-bucket-policy-only",
                        "--config", rclone_conf, "--retries", "10",
                        "--low-level-retries", "20", "--no-check-dest",
@@ -168,15 +155,8 @@ def _recover_orphan(job):
             gcs_exit = docker_client.api.exec_inspect(gcs_exec)["ExitCode"]
             if gcs_exit == 0:
                 _log("Recovery: GCS upload complete.")
-                moved_dir = f"/downloads/faphouse/#moved/{stem}"
-                container.exec_run(["mkdir", "-p", moved_dir])
-                container.exec_run(["mv", "-f", f"/downloads/faphouse/{stem}.info.json", moved_dir + "/"])
-                if thumb_name:
-                    container.exec_run(["mv", "-f", f"/downloads/faphouse/{thumb_name}", moved_dir + "/"])
-                if sheet_name:
-                    container.exec_run(["mv", "-f", f"/downloads/faphouse/{sheet_name}", moved_dir + "/"])
-                container.exec_run(["rm", "-f", f"/downloads/faphouse/{safe_name}"])
-                _log(f"Recovery: archived to #moved/{stem}/")
+                container.exec_run(["rm", "-f", f"{vid_dir}/{safe_name}"])
+                _log(f"Recovery: MP4 deleted from #moved/{stem}/")
             else:
                 _log(f"Recovery: GCS upload failed (exit {gcs_exit})")
         except Exception as ue:
@@ -528,7 +508,11 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
         _log(f"Downloading: {safe_name}")
         _log(f"HLS URL: {cdn_url[:80]}...")
         container = docker_client.containers.get(QBT_CONTAINER)
-        container.exec_run(["mkdir", "-p", "/downloads/faphouse"])
+        stem = safe_name[:-4]
+        vid_dir = f"/downloads/faphouse/#moved/{stem}"
+        container.exec_run(["mkdir", "-p", vid_dir])
+
+        # Save JSON into the video folder
         info_bytes = json.dumps(info_payload, indent=2, ensure_ascii=False).encode("utf-8")
         tar_buf = io.BytesIO()
         with tarfile.open(fileobj=tar_buf, mode="w") as tar:
@@ -536,12 +520,12 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
             ti.size = len(info_bytes)
             tar.addfile(ti, io.BytesIO(info_bytes))
         tar_buf.seek(0)
-        container.put_archive("/downloads/faphouse", tar_buf.getvalue())
+        container.put_archive(vid_dir, tar_buf.getvalue())
 
         cmd = ["yt-dlp", "--no-playlist",
                "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
                "--merge-output-format", "mp4",
-               "-o", f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+               "-o", f"{vid_dir}/{stem}.mp4",
                "--downloader", "ffmpeg",
                "--hls-use-mpegts",
                cdn_url]
@@ -574,10 +558,10 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                     ext = thumbnail_url.split("?")[0].rsplit(".", 1)[-1].lower()
                     if ext not in ("jpg", "jpeg", "png", "webp"):
                         ext = "jpg"
-                    thumb_name = safe_name[:-4] + f".{ext}"
+                    thumb_name = stem + f".{ext}"
                     _log(f"Downloading thumbnail: {thumb_name}")
                     t_result = container.exec_run(
-                        ["wget", "-q", "-O", f"/downloads/faphouse/{thumb_name}", thumbnail_url]
+                        ["wget", "-q", "-O", f"{vid_dir}/{thumb_name}", thumbnail_url]
                     )
                     if t_result.exit_code != 0:
                         _log(f"Thumbnail download failed (exit {t_result.exit_code})")
@@ -589,44 +573,28 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                     thumb_name = None
             # Generate contact sheet
             sheet_name = None
-            _sheet_out = f"/downloads/faphouse/{safe_name[:-4]}.preview.jpg"
+            _sheet_out = f"{vid_dir}/{stem}.preview.jpg"
             if _generate_contact_sheet(
                     container,
-                    f"/downloads/faphouse/{safe_name[:-4]}.mp4",
+                    f"{vid_dir}/{stem}.mp4",
                     _sheet_out, _log):
-                sheet_name = safe_name[:-4] + ".preview.jpg"
+                sheet_name = stem + ".preview.jpg"
             # ── Uploads ──────────────────────────────────────────────────
             try:
                 c_info = docker_client.api.inspect_container(container.id)
                 env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
                 rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
 
-                # Build exact file list for rclone (avoids glob issues with [ ] in names)
-                _rclone_files = [safe_name, f"{safe_name[:-4]}.info.json"]
-                if thumb_name: _rclone_files.append(thumb_name)
-                if sheet_name: _rclone_files.append(sheet_name)
-                _files_list_bytes = "\n".join(_rclone_files).encode("utf-8")
-                _files_list_name = f"rclone_files_{job_id}.txt"
-                _tar_buf = io.BytesIO()
-                with tarfile.open(fileobj=_tar_buf, mode="w") as _tar:
-                    _ti = tarfile.TarInfo(name=_files_list_name)
-                    _ti.size = len(_files_list_bytes)
-                    _tar.addfile(_ti, io.BytesIO(_files_list_bytes))
-                _tar_buf.seek(0)
-                container.put_archive("/tmp", _tar_buf.getvalue())
-                _files_from = f"/tmp/{_files_list_name}"
-
-                # ── 1. OneDrive — upload everything (MP4 + thumbnail + contact sheet + JSON) ──
+                # ── 1. OneDrive — upload the whole video folder ──
                 od_remote  = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
                 od_path    = env_dict.get("WEBDL_PATH", "/WebDownloads")
-                od_dest    = f"{od_remote}:{od_path}/faphouse/{safe_name[:-4]}"
+                od_dest    = f"{od_remote}:{od_path}/faphouse/{stem}"
                 db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
                 _emit_progress(job_id)
                 _log(f"Uploading → OneDrive {od_dest}/")
                 od_cmd = ["rclone", "copy",
-                          "/downloads/faphouse/",
+                          vid_dir + "/",
                           od_dest,
-                          "--files-from", _files_from,
                           "--config", rclone_conf,
                           "--retries", "10",
                           "--low-level-retries", "20",
@@ -647,17 +615,16 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 od_exit = docker_client.api.exec_inspect(od_exec)["ExitCode"]
                 _log("OneDrive upload complete." if od_exit == 0 else f"OneDrive upload failed (exit {od_exit})")
 
-                # ── 2. GCS Coldline — MP4 + JSON + thumbnail + contact sheet ──
+                # ── 2. GCS Coldline — upload the whole video folder ──
                 gcs_remote = env_dict.get("GCS_REMOTE", "gcs")
                 gcs_bucket = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
-                gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{safe_name[:-4]}"
+                gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{stem}"
                 db.update_job(job_id, upload_pct=0, upload_status="GCS")
                 _emit_progress(job_id)
                 _log(f"Uploading → GCS {gcs_dest}/")
                 gcs_cmd = ["rclone", "copy",
-                           "/downloads/faphouse/",
+                           vid_dir + "/",
                            gcs_dest,
-                           "--files-from", _files_from,
                            "--gcs-bucket-policy-only",
                            "--config", rclone_conf,
                            "--retries", "10",
@@ -679,23 +646,9 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_exit = docker_client.api.exec_inspect(gcs_exec)["ExitCode"]
                 if gcs_exit == 0:
                     _log("GCS upload complete.")
-                    # Move JSON + images into #moved/<video-name>/, delete MP4
-                    moved_dir = f"/downloads/faphouse/#moved/{safe_name[:-4]}"
-                    container.exec_run(["mkdir", "-p", moved_dir])
-                    container.exec_run(["mv", "-f",
-                                        f"/downloads/faphouse/{safe_name[:-4]}.info.json",
-                                        moved_dir + "/"])
-                    if thumb_name:
-                        container.exec_run(["mv", "-f",
-                                            f"/downloads/faphouse/{thumb_name}",
-                                            moved_dir + "/"])
-                    if sheet_name:
-                        container.exec_run(["mv", "-f",
-                                            f"/downloads/faphouse/{sheet_name}",
-                                            moved_dir + "/"])
-                    container.exec_run(["rm", "-f",
-                                        f"/downloads/faphouse/{safe_name[:-4]}.mp4"])
-                    _log(f"Archived to #moved/{safe_name[:-4]}/ — MP4 deleted.")
+                    # Delete only the MP4 — JSON + thumbnail + preview stay
+                    container.exec_run(["rm", "-f", f"{vid_dir}/{stem}.mp4"])
+                    _log(f"MP4 deleted from #moved/{stem}/ (archived to GCS).")
                 else:
                     _log(f"GCS upload failed (exit {gcs_exit}) — MP4 kept in place")
             except Exception as ue:
