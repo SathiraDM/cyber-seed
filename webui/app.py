@@ -220,14 +220,16 @@ def parse_ffmpeg_progress(line, total_secs=None):
         cur_secs = int(m.group(2)) * 3600 + int(m.group(3)) * 60 + float(m.group(4))
         bitrate_val = float(m.group(5))
         unit = m.group(6).lower()
+        speed_multiplier = float(m.group(7))
         if unit.startswith('m'):
             bits_per_sec = bitrate_val * 1_000_000
         elif unit.startswith('k'):
             bits_per_sec = bitrate_val * 1_000
         else:
             bits_per_sec = bitrate_val
-        speed_mib = round(bits_per_sec / 8 / 1_048_576, 2)
-        result = {"file_size": f"{size_mib} MiB", "speed": f"{speed_mib} MiB/s"}
+        # actual download speed = video bitrate × speed multiplier
+        dl_speed_mib = round(bits_per_sec * speed_multiplier / 8 / 1_048_576, 1)
+        result = {"file_size": f"{size_mib} MiB", "speed": f"{dl_speed_mib} MiB/s"}
         if total_secs and total_secs > 0:
             result["download_pct"] = round(min(cur_secs / total_secs * 100, 99.9), 1)
         return result
