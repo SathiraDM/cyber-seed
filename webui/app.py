@@ -204,6 +204,9 @@ def _jobs_push_thread():
 _push_thread = threading.Thread(target=_jobs_push_thread, daemon=True)
 _push_thread.start()
 
+# Max 3 FH downloads running concurrently; extras wait in "queued" state.
+_fh_semaphore = threading.Semaphore(3)
+
 # ── CORS (Chrome extension) ──────────────────────────────────────────
 
 @app.after_request
@@ -498,6 +501,8 @@ def _generate_contact_sheet(container, video_path, output_path, log_fn,
 
 def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
     log_path = JOBS_DIR / f"{job_id}.log"
+    # Wait for a free slot (max 3 concurrent); job stays "queued" until acquired.
+    _fh_semaphore.acquire()
     db.update_job(job_id, status="downloading", started_at=datetime.utcnow().isoformat())
 
     def _log(msg):
@@ -663,6 +668,8 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
         db.update_job(job_id, status="failed", ended_at=datetime.utcnow().isoformat(), error=str(e))
         with open(log_path, "a") as f:
             f.write(f"\nERROR: {e}\n")
+    finally:
+        _fh_semaphore.release()
 
 # ── HTTP routes ───────────────────────────────────────────────────────
 
@@ -949,7 +956,7 @@ def fh_resolve():
                 "cdn_url": cdn_url, "thumbnail_url": thumbnail_url,
                 "downloaded_at": datetime.utcnow().isoformat()}
 
-    db.update_job(item_id, status="downloading", name=safe_name, metadata=metadata)
+    db.update_job(item_id, status="queued", name=safe_name, metadata=metadata)
     threading.Thread(target=run_fh_download,
                      args=(item_id, cdn_url, safe_name, info_name, metadata), daemon=True).start()
     return jsonify({"job_id": item_id, "name": safe_name})
