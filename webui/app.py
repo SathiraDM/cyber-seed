@@ -200,10 +200,15 @@ def parse_ytdlp_progress(line):
         return {"download_pct": float(m2.group(1)), "file_size": m2.group(2).strip(),
                 "speed": m2.group(3).strip()}
     # Final summary line: [download] 100% of  699.89MiB in 00:03:30 at 3.33MiB/s
-    # Per-fragment completion looks identical but always has duration 00:00:00 — skip those.
-    m3 = re.search(r'\[download\] 100% of\s+([\d.]+\s*\w+)\s+in\s+(\S+)\s+at\s+([\d.]+\s*\w+/s)', line)
-    if m3 and m3.group(2) != '00:00:00':
-        return {"download_pct": 100.0, "file_size": m3.group(1).strip(), "speed": m3.group(3).strip(), "eta": ""}
+    # Per-fragment completions look identical but with tiny durations like 00:00:01.
+    # The real end-of-file summary always has elapsed >= 1 minute (mm:ss or hh:mm:ss).
+    m3 = re.search(r'\[download\] 100% of\s+([\d.]+\s*\w+)\s+in\s+(\d+:\d+:\d+|\d+:\d+)\s+at\s+([\d.]+\s*\w+/s)', line)
+    if m3:
+        duration = m3.group(2)
+        parts = duration.split(':')
+        total_secs = sum(int(p) * (60 ** i) for i, p in enumerate(reversed(parts)))
+        if total_secs >= 10:  # per-fragment lines are always < 10s
+            return {"download_pct": 100.0, "file_size": m3.group(1).strip(), "speed": m3.group(3).strip(), "eta": ""}
     return None
 
 def parse_rclone_progress(line):
