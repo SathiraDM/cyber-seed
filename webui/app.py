@@ -117,7 +117,19 @@ def _recover_orphan(job):
             c_info = docker_client.api.inspect_container(container.id)
             env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
             rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
-            _rclone_stem = stem.replace('[', '\\[').replace(']', '\\]')
+            _rec_files = [safe_name, f"{stem}.info.json"]
+            if thumb_name: _rec_files.append(thumb_name)
+            if sheet_name: _rec_files.append(sheet_name)
+            _rec_bytes = "\n".join(_rec_files).encode("utf-8")
+            _rec_list_name = f"rclone_files_{job_id}.txt"
+            _rec_tar = io.BytesIO()
+            with tarfile.open(fileobj=_rec_tar, mode="w") as _t:
+                _ti2 = tarfile.TarInfo(name=_rec_list_name)
+                _ti2.size = len(_rec_bytes)
+                _t.addfile(_ti2, io.BytesIO(_rec_bytes))
+            _rec_tar.seek(0)
+            container.put_archive("/tmp", _rec_tar.getvalue())
+            _rec_files_from = f"/tmp/{_rec_list_name}"
 
             od_remote = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
             od_path   = env_dict.get("WEBDL_PATH", "/WebDownloads")
@@ -125,7 +137,7 @@ def _recover_orphan(job):
             _log(f"Recovery: uploading → OneDrive {od_dest}/")
             db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
             od_cmd = ["rclone", "copy", "/downloads/faphouse/", od_dest,
-                      "--include", f"{_rclone_stem}.*",
+                      "--files-from", _rec_files_from,
                       "--config", rclone_conf, "--retries", "10",
                       "--low-level-retries", "20", "--no-check-dest",
                       "--use-json-log", "--stats=2s", "-v"]
@@ -143,7 +155,7 @@ def _recover_orphan(job):
             _log(f"Recovery: uploading → GCS {gcs_dest}/")
             db.update_job(job_id, upload_pct=0, upload_status="GCS")
             gcs_cmd = ["rclone", "copy", "/downloads/faphouse/", gcs_dest,
-                       "--include", f"{_rclone_stem}.*",
+                       "--files-from", _rec_files_from,
                        "--gcs-bucket-policy-only",
                        "--config", rclone_conf, "--retries", "10",
                        "--low-level-retries", "20", "--no-check-dest",
@@ -491,6 +503,7 @@ def _generate_contact_sheet(container, video_path, output_path, log_fn,
         "--end-delay-percent",   "5",
         "-w",                    "1920",
         "--quality",             "90",
+        "--fast",
         "-o", output_path,
     ]
     result = container.exec_run(cmd)
@@ -588,6 +601,21 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
                 rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
 
+                # Build exact file list for rclone (avoids glob issues with [ ] in names)
+                _rclone_files = [safe_name, f"{safe_name[:-4]}.info.json"]
+                if thumb_name: _rclone_files.append(thumb_name)
+                if sheet_name: _rclone_files.append(sheet_name)
+                _files_list_bytes = "\n".join(_rclone_files).encode("utf-8")
+                _files_list_name = f"rclone_files_{job_id}.txt"
+                _tar_buf = io.BytesIO()
+                with tarfile.open(fileobj=_tar_buf, mode="w") as _tar:
+                    _ti = tarfile.TarInfo(name=_files_list_name)
+                    _ti.size = len(_files_list_bytes)
+                    _tar.addfile(_ti, io.BytesIO(_files_list_bytes))
+                _tar_buf.seek(0)
+                container.put_archive("/tmp", _tar_buf.getvalue())
+                _files_from = f"/tmp/{_files_list_name}"
+
                 # ── 1. OneDrive — upload everything (MP4 + thumbnail + contact sheet + JSON) ──
                 od_remote  = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
                 od_path    = env_dict.get("WEBDL_PATH", "/WebDownloads")
@@ -595,11 +623,10 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
                 _emit_progress(job_id)
                 _log(f"Uploading → OneDrive {od_dest}/")
-                _rclone_stem = safe_name[:-4].replace('[', '\\[').replace(']', '\\]')
                 od_cmd = ["rclone", "copy",
                           "/downloads/faphouse/",
                           od_dest,
-                          "--include", f"{_rclone_stem}.*",
+                          "--files-from", _files_from,
                           "--config", rclone_conf,
                           "--retries", "10",
                           "--low-level-retries", "20",
@@ -630,7 +657,7 @@ def run_fh_download(job_id, cdn_url, safe_name, info_name, info_payload):
                 gcs_cmd = ["rclone", "copy",
                            "/downloads/faphouse/",
                            gcs_dest,
-                           "--include", f"{_rclone_stem}.*",
+                           "--files-from", _files_from,
                            "--gcs-bucket-policy-only",
                            "--config", rclone_conf,
                            "--retries", "10",
