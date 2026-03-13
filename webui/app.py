@@ -712,6 +712,11 @@ def fh_resolve():
     quality    = data.get("quality", "")
     models     = data.get("models", [])
     studio     = data.get("studio", "")
+    # Server-side safety filter: strip studio name from models regardless of
+    # whether the extension already filtered it (service worker cache may be stale).
+    if studio:
+        studio_lower = studio.strip().lower()
+        models = [m for m in models if m.strip().lower() != studio_lower]
     tags       = data.get("tags", [])
     duration   = data.get("duration", "")
     views      = data.get("views", "")
