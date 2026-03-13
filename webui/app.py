@@ -78,18 +78,101 @@ def _recover_orphan(job):
         time.sleep(10)
 
     # Determine outcome by checking if the output file exists
+    # Use list form to avoid shell glob-expansion of brackets in filenames
     file_found = False
     try:
         if source == "fh":
-            result = container.exec_run(f"test -f /downloads/faphouse/{name}")
+            result = container.exec_run(["test", "-f", f"/downloads/faphouse/{name}"])
             file_found = result.exit_code == 0
         elif name:
-            result = container.exec_run(f"test -d /downloads/{name}")
+            result = container.exec_run(["test", "-d", f"/downloads/{name}"])
             file_found = result.exit_code == 0
     except Exception:
         pass
 
-    if file_found:
+    if file_found and source == "fh":
+        _log("Recovery: download file found — resuming contact sheet + upload.")
+        # Reconstruct variables needed for post-processing
+        safe_name = name  # e.g. "Title [1080p].mp4"
+        stem = safe_name[:-4]
+        # Find thumbnail (any image extension)
+        thumb_name = None
+        for ext in ("jpg", "jpeg", "png", "webp"):
+            r = container.exec_run(["test", "-f", f"/downloads/faphouse/{stem}.{ext}"])
+            if r.exit_code == 0:
+                thumb_name = f"{stem}.{ext}"
+                break
+        # Generate contact sheet if not already present
+        sheet_name = None
+        sheet_path = f"/downloads/faphouse/{stem}.preview.jpg"
+        r = container.exec_run(["test", "-f", sheet_path])
+        if r.exit_code != 0:
+            if _generate_contact_sheet(container, f"/downloads/faphouse/{safe_name}",
+                                       sheet_path, _log):
+                sheet_name = f"{stem}.preview.jpg"
+        else:
+            sheet_name = f"{stem}.preview.jpg"
+        # Run uploads
+        try:
+            c_info = docker_client.api.inspect_container(container.id)
+            env_dict = dict(e.split("=", 1) for e in c_info["Config"]["Env"] if "=" in e)
+            rclone_conf = env_dict.get("RCLONE_CONFIG", "/config/rclone/rclone.conf")
+            _rclone_stem = stem.replace('[', '\\[').replace(']', '\\]')
+
+            od_remote = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
+            od_path   = env_dict.get("WEBDL_PATH", "/WebDownloads")
+            od_dest   = f"{od_remote}:{od_path}/faphouse/{stem}"
+            _log(f"Recovery: uploading → OneDrive {od_dest}/")
+            db.update_job(job_id, status="uploading", upload_pct=0, upload_status="OneDrive")
+            od_cmd = ["rclone", "copy", "/downloads/faphouse/", od_dest,
+                      "--include", f"{_rclone_stem}.*",
+                      "--config", rclone_conf, "--retries", "10",
+                      "--low-level-retries", "20", "--no-check-dest",
+                      "--use-json-log", "--stats=2s", "-v"]
+            od_exec = docker_client.api.exec_create(container.id, od_cmd)["Id"]
+            for chunk in docker_client.api.exec_start(od_exec, stream=True):
+                if chunk:
+                    with open(log_path, "a") as f:
+                        f.write(chunk.decode("utf-8", errors="replace"))
+            od_exit = docker_client.api.exec_inspect(od_exec)["ExitCode"]
+            _log("Recovery: OneDrive upload complete." if od_exit == 0 else f"Recovery: OneDrive upload failed (exit {od_exit})")
+
+            gcs_remote = env_dict.get("GCS_REMOTE", "gcs")
+            gcs_bucket = env_dict.get("GCS_BUCKET", "cyberseed-bucket-01")
+            gcs_dest   = f"{gcs_remote}:{gcs_bucket}/faphouse/{stem}"
+            _log(f"Recovery: uploading → GCS {gcs_dest}/")
+            db.update_job(job_id, upload_pct=0, upload_status="GCS")
+            gcs_cmd = ["rclone", "copy", "/downloads/faphouse/", gcs_dest,
+                       "--include", f"{_rclone_stem}.*",
+                       "--gcs-bucket-policy-only",
+                       "--config", rclone_conf, "--retries", "10",
+                       "--low-level-retries", "20", "--no-check-dest",
+                       "--use-json-log", "--stats=2s", "-v"]
+            gcs_exec = docker_client.api.exec_create(container.id, gcs_cmd)["Id"]
+            for chunk in docker_client.api.exec_start(gcs_exec, stream=True):
+                if chunk:
+                    with open(log_path, "a") as f:
+                        f.write(chunk.decode("utf-8", errors="replace"))
+            gcs_exit = docker_client.api.exec_inspect(gcs_exec)["ExitCode"]
+            if gcs_exit == 0:
+                _log("Recovery: GCS upload complete.")
+                moved_dir = f"/downloads/faphouse/#moved/{stem}"
+                container.exec_run(["mkdir", "-p", moved_dir])
+                container.exec_run(["mv", "-f", f"/downloads/faphouse/{stem}.info.json", moved_dir + "/"])
+                if thumb_name:
+                    container.exec_run(["mv", "-f", f"/downloads/faphouse/{thumb_name}", moved_dir + "/"])
+                if sheet_name:
+                    container.exec_run(["mv", "-f", f"/downloads/faphouse/{sheet_name}", moved_dir + "/"])
+                container.exec_run(["rm", "-f", f"/downloads/faphouse/{safe_name}"])
+                _log(f"Recovery: archived to #moved/{stem}/")
+            else:
+                _log(f"Recovery: GCS upload failed (exit {gcs_exit})")
+        except Exception as ue:
+            _log(f"Recovery: upload error: {ue}")
+        db.update_job(job_id, status="done", download_pct=100.0,
+                      ended_at=datetime.utcnow().isoformat())
+        _log("Recovery: job completed.")
+    elif file_found:
         db.update_job(job_id, status="done", download_pct=100.0,
                       ended_at=datetime.utcnow().isoformat())
         _log("Recovery: download completed successfully.")
