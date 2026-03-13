@@ -365,8 +365,9 @@ function showLog(id, title) {
   logJobId = id;
   function fetchLog() {
     fetch('/api/jobs/' + id + '/log/full').then(function(r) { return r.text(); }).then(function(t) {
+      var atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
       pre.textContent = t;
-      pre.scrollTop = pre.scrollHeight;
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
     });
   }
   fetchLog();
