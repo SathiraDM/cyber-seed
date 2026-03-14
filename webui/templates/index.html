@@ -16,6 +16,8 @@
     textarea{field-sizing:content;min-height:2.5rem}
     .badge{font-size:.65rem;padding:2px 8px;border-radius:9999px;font-weight:600;text-transform:uppercase}
     .badge-queued,.badge-pending{background:#374151;color:#9ca3af}
+    .badge-pending_conflict{background:#78350f;color:#fcd34d}
+    .badge-duplicate{background:#1f2937;color:#6b7280}
     .badge-running,.badge-downloading{background:#1e3a5f;color:#60a5fa}
     .badge-uploading{background:#14403a;color:#34d399}
     .badge-processing{background:#3b2f6b;color:#a78bfa}
@@ -132,8 +134,75 @@
 
 </main>
 
+<!-- Conflict popup -->
+<div id="conflictModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-filter backdrop-blur-sm">
+  <div class="bg-cs-card border border-yellow-700/60 rounded-xl w-11/12 max-w-lg p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="text-yellow-400 text-2xl">&#x26A0;</span>
+      <h2 class="text-white font-semibold text-base">Title Conflict Detected</h2>
+    </div>
+    <p class="text-gray-400 text-sm mb-4">A different video with the same title already exists in your library.</p>
+    <div class="grid grid-cols-2 gap-3 mb-5">
+      <div class="bg-cs-bg border border-cs-border rounded-lg p-3">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Existing (kept)</p>
+        <p class="text-white text-sm font-medium truncate" id="conflictOldName"></p>
+        <p class="text-gray-400 text-xs mt-1">&#x23F1; <span id="conflictOldDur">unknown</span></p>
+      </div>
+      <div class="bg-cs-bg border border-cs-border rounded-lg p-3">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">New (incoming)</p>
+        <p class="text-white text-sm font-medium truncate" id="conflictNewName"></p>
+        <p class="text-gray-400 text-xs mt-1">&#x23F1; <span id="conflictNewDur">unknown</span></p>
+      </div>
+    </div>
+    <div class="flex flex-col gap-2">
+      <button onclick="resolveConflict('keep_old')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-green-700 text-gray-300 hover:text-green-300 text-sm rounded-lg transition">
+        &#x2705; Keep Existing &mdash; discard new
+      </button>
+      <button onclick="resolveConflict('keep_new')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-red-700 text-gray-300 hover:text-red-300 text-sm rounded-lg transition">
+        &#x1F504; Replace with New &mdash; delete existing everywhere
+      </button>
+      <button onclick="resolveConflict('keep_both')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-blue-700 text-gray-300 hover:text-blue-300 text-sm rounded-lg transition">
+        &#x2795; Keep Both &mdash; download new with unique suffix
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Conflict popup -->
+<div id="conflictModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-filter backdrop-blur-sm">
+  <div class="bg-cs-card border border-yellow-700/60 rounded-xl w-11/12 max-w-lg p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="text-yellow-400 text-2xl">&#x26A0;</span>
+      <h2 class="text-white font-semibold text-base">Title Conflict Detected</h2>
+    </div>
+    <p class="text-gray-400 text-sm mb-4">A different video with the same title already exists in your library.</p>
+    <div class="grid grid-cols-2 gap-3 mb-5">
+      <div class="bg-cs-bg border border-cs-border rounded-lg p-3">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Existing (kept)</p>
+        <p class="text-white text-sm font-medium truncate" id="conflictOldName"></p>
+        <p class="text-gray-400 text-xs mt-1">&#x23F1; <span id="conflictOldDur">unknown</span></p>
+      </div>
+      <div class="bg-cs-bg border border-cs-border rounded-lg p-3">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">New (incoming)</p>
+        <p class="text-white text-sm font-medium truncate" id="conflictNewName"></p>
+        <p class="text-gray-400 text-xs mt-1">&#x23F1; <span id="conflictNewDur">unknown</span></p>
+      </div>
+    </div>
+    <div class="flex flex-col gap-2">
+      <button onclick="resolveConflict('keep_old')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-green-700 text-gray-300 hover:text-green-300 text-sm rounded-lg transition">
+        &#x2705; Keep Existing &mdash; discard new
+      </button>
+      <button onclick="resolveConflict('keep_new')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-red-700 text-gray-300 hover:text-red-300 text-sm rounded-lg transition">
+        &#x1F504; Replace with New &mdash; delete existing everywhere
+      </button>
+      <button onclick="resolveConflict('keep_both')" class="w-full py-2 bg-cs-card border border-cs-border hover:border-blue-700 text-gray-300 hover:text-blue-300 text-sm rounded-lg transition">
+        &#x2795; Keep Both &mdash; download new with unique suffix
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Log modal -->
-<div id="logModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-filter backdrop-blur-sm" onclick="if(event.target===this)closeLog()">
   <div class="bg-cs-card border border-cs-border rounded-xl w-11/12 max-w-3xl" style="max-height:80vh;display:flex;flex-direction:column">
     <div class="flex items-center justify-between px-5 py-3 border-b border-cs-border">
       <span class="text-sm font-medium text-white" id="logTitle">Job Log</span>
@@ -247,7 +316,7 @@ function renderJobs(jobs) {
   el.innerHTML = jobs.map(function(j) {
     var pct = j.download_pct || 0;
     var isUploading = j.status === 'uploading';
-    var isActive = ['running','downloading','processing','queued','pending','uploading'].indexOf(j.status) >= 0;
+    var isActive = ['running','downloading','processing','queued','pending','uploading','pending_conflict'].indexOf(j.status) >= 0;
     var hasName = j.name && j.name !== j.url;
     var title = hasName ? j.name : j.url;
     var meta = j.metadata || {};
@@ -393,13 +462,17 @@ function closeLog() {
 var socket = io({ transports: ['websocket', 'polling'] });
 var logTimer = null;
 var logJobId = null;
-var ACTIVE_STATUSES = ['running','downloading','processing','queued','pending','uploading'];
+var ACTIVE_STATUSES = ['running','downloading','processing','queued','pending','uploading','pending_conflict'];
 
 socket.on('refresh', function() { loadJobs(); });
 socket.on('connect', function() { loadJobs(); });
 
 // In-place progress update — no full re-render needed
 socket.on('job_update', function(d) {
+  // Show conflict popup immediately
+  if (d.status === 'pending_conflict' && d.conflict) {
+    openConflictPopup(d.id, d.name, d.conflict);
+  }
   var prog = document.getElementById('prog-' + d.id);
   var card = document.getElementById('job-' + d.id);
   if (!prog || !card) return; // card not in current view — full refresh on next tick
@@ -418,6 +491,33 @@ socket.on('job_update', function(d) {
     if (title && title.textContent !== d.name) title.textContent = d.name;
   }
 });
+
+// ── Conflict popup ──
+var _conflictJobId = null;
+
+function openConflictPopup(jobId, name, conflict) {
+  _conflictJobId = jobId;
+  var stem = name ? name.replace(/\.mp4$/i, '') : 'This video';
+  document.getElementById('conflictOldName').textContent = stem;
+  document.getElementById('conflictNewName').textContent = stem;
+  document.getElementById('conflictOldDur').textContent = conflict.old_duration || 'unknown';
+  document.getElementById('conflictNewDur').textContent = conflict.new_duration || 'unknown';
+  var modal = document.getElementById('conflictModal');
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+function resolveConflict(decision) {
+  if (!_conflictJobId) return;
+  var jobId = _conflictJobId;
+  _conflictJobId = null;
+  document.getElementById('conflictModal').style.display = 'none';
+  document.getElementById('conflictModal').classList.add('hidden');
+  fetch('/api/faphouse/resolve/conflict', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ job_id: jobId, decision: decision })
+  }).then(function() { loadJobs(); });
+}
 
 // ── Keyboard ──
 document.getElementById('urlInput').addEventListener('keydown', function(e) {

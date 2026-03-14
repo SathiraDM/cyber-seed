@@ -191,7 +191,7 @@ def _start_orphan_recovery():
 # Runs fast (1s) when active jobs exist, slow (8s) when idle.
 
 def _jobs_push_thread():
-    ACTIVE_STATUSES = {"running", "downloading", "uploading", "processing", "queued", "pending"}
+    ACTIVE_STATUSES = {"running", "downloading", "uploading", "processing", "queued", "pending", "pending_conflict"}
     while True:
         try:
             jobs = db.list_jobs(source="", status="", page=1, per_page=200, search="")[0]
@@ -351,7 +351,7 @@ def _emit_progress(job_id):
     try:
         j = db.get_job(job_id)
         if j:
-            socketio.emit("job_update", {
+            payload = {
                 "id": j["id"], "status": j["status"],
                 "download_pct": j.get("download_pct") or 0,
                 "upload_pct":   j.get("upload_pct")   or 0,
@@ -360,7 +360,11 @@ def _emit_progress(job_id):
                 "eta":          j.get("eta")          or "",
                 "file_size":    j.get("file_size")    or "",
                 "name":         j.get("name")         or "",
-            })
+            }
+            if j.get("status") == "pending_conflict":
+                meta = j.get("metadata") or {}
+                payload["conflict"] = meta.get("_conflict", {})
+            socketio.emit("job_update", payload)
     except Exception:
         pass
 
@@ -958,25 +962,6 @@ def fh_resolve():
         if m_slug:
             fh_slug = m_slug.group(1)
 
-    # If a folder with this name already exists but belongs to a different video, append the slug
-    try:
-        _c = docker_client.containers.get(QBT_CONTAINER)
-        vid_dir_check = f"/downloads/faphouse/#moved/{stem}"
-        if _c.exec_run(["test", "-d", vid_dir_check]).exit_code == 0 and fh_slug:
-            info_r = _c.exec_run(["cat", f"{vid_dir_check}/{stem}.info.json"])
-            existing_url = ""
-            if info_r.exit_code == 0:
-                try:
-                    existing_url = json.loads(info_r.output).get("source_url", "")
-                except Exception:
-                    pass
-            if existing_url and existing_url != source_url:
-                # Different video, same title — disambiguate with FH slug
-                stem = f"{stem} ({fh_slug})"
-                safe_name = f"{stem}.mp4"
-    except Exception:
-        pass
-
     info_name = stem + ".info.json"
 
     metadata = {"title": title, "source_url": source_url, "models": models,
@@ -985,10 +970,119 @@ def fh_resolve():
                 "cdn_url": cdn_url, "thumbnail_url": thumbnail_url,
                 "downloaded_at": datetime.utcnow().isoformat()}
 
+    # Check if a folder with this name already exists and belongs to a different video
+    try:
+        _c = docker_client.containers.get(QBT_CONTAINER)
+        vid_dir_check = f"/downloads/faphouse/#moved/{stem}"
+        if _c.exec_run(["test", "-d", vid_dir_check]).exit_code == 0:
+            info_r = _c.exec_run(["cat", f"{vid_dir_check}/{stem}.info.json"])
+            existing_url = ""
+            existing_duration = ""
+            old_job_id = None
+            if info_r.exit_code == 0:
+                try:
+                    existing_data = json.loads(info_r.output)
+                    existing_url = existing_data.get("source_url", "")
+                    existing_duration = existing_data.get("duration", "")
+                except Exception:
+                    pass
+            if existing_url and existing_url != source_url:
+                # Find the old job in DB
+                old_jobs, _ = db.list_jobs(source="fh", search=stem, per_page=200)
+                old_job = next((j for j in old_jobs
+                                if j.get("status") == "done" and stem in (j.get("name") or "")), None)
+                if old_job:
+                    old_job_id = old_job["id"]
+                conflict_data = {
+                    "old_job_id": old_job_id,
+                    "old_duration": existing_duration,
+                    "new_duration": duration,
+                    "old_folder": vid_dir_check,
+                    "old_source_url": existing_url,
+                    "cdn_url": cdn_url,
+                    "safe_name": safe_name,
+                    "info_name": info_name,
+                    "fh_slug": fh_slug,
+                }
+                conflict_metadata = {**metadata, "_conflict": conflict_data}
+                db.update_job(item_id, status="pending_conflict", name=safe_name,
+                              metadata=conflict_metadata)
+                _emit_progress(item_id)
+                return jsonify({"job_id": item_id, "status": "pending_conflict",
+                                "conflict": conflict_data})
+    except Exception:
+        pass
+
     db.update_job(item_id, status="queued", name=safe_name, metadata=metadata)
     threading.Thread(target=run_fh_download,
                      args=(item_id, cdn_url, safe_name, info_name, metadata), daemon=True).start()
     return jsonify({"job_id": item_id, "name": safe_name})
+
+@app.route("/api/faphouse/resolve/conflict", methods=["POST"])
+@login_required
+def fh_resolve_conflict():
+    data     = request.get_json(force=True) or {}
+    job_id   = data.get("job_id", "")
+    decision = data.get("decision", "")  # keep_old | keep_new | keep_both
+
+    job = db.get_job(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    meta     = job.get("metadata") or {}
+    conflict = meta.get("_conflict", {})
+    old_job_id  = conflict.get("old_job_id")
+    old_folder  = conflict.get("old_folder", "")
+    cdn_url     = conflict.get("cdn_url", "")
+    safe_name   = conflict.get("safe_name", "")
+    info_name   = conflict.get("info_name", "")
+    fh_slug     = conflict.get("fh_slug", "")
+    clean_meta  = {k: v for k, v in meta.items() if k != "_conflict"}
+
+    if decision == "keep_old":
+        db.update_job(job_id, status="duplicate", ended_at=datetime.utcnow().isoformat())
+        return jsonify({"ok": True})
+
+    elif decision == "keep_new":
+        # Delete old folder from VM, OneDrive and GCS
+        try:
+            container = docker_client.containers.get(QBT_CONTAINER)
+            env_r = container.exec_run(["env"])
+            env_dict = dict(line.split("=", 1) for line in
+                            env_r.output.decode(errors="replace").splitlines() if "=" in line)
+            od_remote = env_dict.get("ONEDRIVE_REMOTE", "onedrive")
+            od_path   = env_dict.get("WEBDL_PATH", "/WebDownloads")
+            stem      = safe_name[:-4]
+            container.exec_run(["rm", "-rf", old_folder])
+            container.exec_run(["rclone", "purge",
+                                f"{od_remote}:{od_path}/faphouse/{stem}"])
+            container.exec_run(["rclone", "purge",
+                                f"gcs:cyberseed-bucket-01/faphouse/{stem}",
+                                "--gcs-bucket-policy-only"])
+        except Exception:
+            pass
+        if old_job_id:
+            db.update_job(old_job_id, status="duplicate",
+                          ended_at=datetime.utcnow().isoformat())
+        db.update_job(job_id, status="queued", name=safe_name, metadata=clean_meta)
+        threading.Thread(target=run_fh_download,
+                         args=(job_id, cdn_url, safe_name, info_name, clean_meta),
+                         daemon=True).start()
+        return jsonify({"ok": True})
+
+    elif decision == "keep_both":
+        stem_base    = safe_name[:-4]
+        new_stem     = f"{stem_base} ({fh_slug})"
+        new_safe     = f"{new_stem}.mp4"
+        new_info     = f"{new_stem}.info.json"
+        db.update_job(job_id, status="queued", name=new_safe, metadata=clean_meta)
+        threading.Thread(target=run_fh_download,
+                         args=(job_id, cdn_url, new_safe, new_info, clean_meta),
+                         daemon=True).start()
+        return jsonify({"ok": True})
+
+    return jsonify({"error": "Invalid decision"}), 400
+
 
 @app.route("/api/faphouse/queue/clear", methods=["POST"])
 @login_required
