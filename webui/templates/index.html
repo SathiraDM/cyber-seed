@@ -209,6 +209,7 @@
 </div>
 
 <!-- Log modal -->
+<div id="logModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-filter backdrop-blur-sm" onclick="if(event.target===this)closeLog()">
   <div class="bg-cs-card border border-cs-border rounded-xl w-11/12 max-w-3xl" style="max-height:80vh;display:flex;flex-direction:column">
     <div class="flex items-center justify-between px-5 py-3 border-b border-cs-border">
       <span class="text-sm font-medium text-white" id="logTitle">Job Log</span>
@@ -375,7 +376,10 @@ function buildProgressHtml(j) {
   if (!isUploading && j.status !== 'done' && displayPct >= 100) displayPct = 99.9;
   var uploadDest = (j.upload_status || 'OneDrive');
   var label = isUploading ? ('&#x2B06; ' + uploadDest) : (j.status === 'downloading' || j.status === 'running' ? '&#x2B07; Downloading' : '&#x23F3; Waiting...');
+  var isWaiting = !isUploading && !isHLS && !isFFmpeg && (j.status === 'queued' || j.status === 'pending' || j.status === 'pending_conflict');
   var barColor = isUploading ? 'bg-cs-green' : (j.status === 'downloading' || j.status === 'running' ? 'bg-cs-accent' : 'bg-gray-600');
+  var barStyle = (isFFmpeg || isWaiting) ? 'width:100%' : 'width:' + Math.min(displayPct, 100) + '%';
+  var barExtra = (isFFmpeg || isWaiting) ? ' opacity-40 animate-pulse' : '';
   var info;
   if (isHLS) {
     // Browser-style: show frag counter + speed, no flickering percentage number
@@ -396,11 +400,6 @@ function buildProgressHtml(j) {
     if (j.eta && j.eta !== 'Unknown') info += ' &#x2022; ETA ' + j.eta;
     if (j.file_size) info += ' &#x2022; ' + j.file_size;
   }
-  // For ffmpeg mode, show a full-width pulsing bar (indeterminate) since pct is unavailable
-  var barStyle = isFFmpeg
-    ? 'width:100%'
-    : 'width:' + Math.min(displayPct, 100) + '%';
-  var barExtra = isFFmpeg ? ' opacity-40 animate-pulse' : '';
   return '<div class="flex items-center justify-between text-[11px] text-gray-400 mb-1.5"><span>' + label + '</span><span>' + info + '</span></div>' +
          '<div class="w-full h-1.5 bg-cs-bg rounded-full overflow-hidden">' +
          '<div class="progress-bar h-full rounded-full ' + barColor + barExtra + '" style="' + barStyle + '"></div></div>';
