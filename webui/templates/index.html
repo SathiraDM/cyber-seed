@@ -306,8 +306,8 @@ function loadJobs() {
   var status = document.getElementById('statusFilter').value;
   var search = document.getElementById('searchInput').value;
   var src = currentSource;
-  var perPageVal = parseInt(document.getElementById('perPageSelect').value) || 20;
-  var perPage = perPageVal === 0 ? 9999 : perPageVal;
+  var perPageVal = parseInt(document.getElementById('perPageSelect').value);
+  var perPage = (isNaN(perPageVal) || perPageVal === 0) ? 9999 : perPageVal;
   var params = 'source=' + src + '&status=' + status + '&page=' + currentPage + '&per_page=' + perPage + '&search=' + encodeURIComponent(search);
   fetch('/api/jobs?' + params).then(function(r) { return r.json(); }).then(function(data) {
     renderJobs(data.jobs);
