@@ -66,11 +66,17 @@ async function pollQueue() {
     const queue = await apiFetch('/api/faphouse/queue');
     if (!queue || !queue.length) return;
 
-    // Process all pending items in parallel — each opens its own tab simultaneously
-    await Promise.all(queue.map(item => {
-      console.log('[cyberseed] Processing:', item.url);
-      return processItem(item);
-    }));
+    // Process at most 3 items concurrently — open max 3 tabs at a time
+    const CONCURRENCY = 3;
+    let idx = 0;
+    async function worker() {
+      while (idx < queue.length) {
+        const item = queue[idx++];
+        console.log('[cyberseed] Processing:', item.url);
+        await processItem(item);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
   } catch (e) {
     console.error('[cyberseed] poll error:', e);
   } finally {
