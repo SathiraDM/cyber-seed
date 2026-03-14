@@ -114,6 +114,12 @@
       <option value="done">Done</option>
       <option value="failed">Failed</option>
     </select>
+    <select id="perPageSelect" class="bg-cs-card border border-cs-border rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-cs-accent" onchange="currentPage=1;loadJobs()">
+      <option value="10">10 / page</option>
+      <option value="20" selected>20 / page</option>
+      <option value="50">50 / page</option>
+      <option value="0">All</option>
+    </select>
     <input id="searchInput" type="text" placeholder="Search..."
       class="bg-cs-card border border-cs-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cs-accent w-48">
     <button onclick="clearFinished()" class="px-3 py-1.5 bg-cs-card border border-cs-border rounded-lg text-gray-400 hover:text-red-400 hover:border-red-800 transition text-xs">&#x1F5D1; Clear finished</button>
@@ -300,7 +306,9 @@ function loadJobs() {
   var status = document.getElementById('statusFilter').value;
   var search = document.getElementById('searchInput').value;
   var src = currentSource;
-  var params = 'source=' + src + '&status=' + status + '&page=' + currentPage + '&per_page=' + PER_PAGE + '&search=' + encodeURIComponent(search);
+  var perPageVal = parseInt(document.getElementById('perPageSelect').value) || 20;
+  var perPage = perPageVal === 0 ? 9999 : perPageVal;
+  var params = 'source=' + src + '&status=' + status + '&page=' + currentPage + '&per_page=' + perPage + '&search=' + encodeURIComponent(search);
   fetch('/api/jobs?' + params).then(function(r) { return r.json(); }).then(function(data) {
     renderJobs(data.jobs);
     renderPagination(data.page, data.pages, data.total);
