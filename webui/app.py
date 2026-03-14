@@ -948,7 +948,36 @@ def fh_resolve():
         q_tag = f"{quality}p" if quality.isdigit() else quality
         safe_name = f"{safe_name} [{q_tag}]"
     safe_name += ".mp4"
-    info_name  = safe_name[:-4] + ".info.json"
+    stem = safe_name[:-4]
+
+    # Extract the short unique slug from the FH URL (e.g. "19FAEJ" from ".../petite-18-hobby-whore-19FAEJ")
+    fh_slug = ""
+    if source_url:
+        slug_part = source_url.split("#")[0].rstrip("/").rsplit("/", 1)[-1]
+        m_slug = re.search(r'-([A-Za-z0-9]{4,8})$', slug_part)
+        if m_slug:
+            fh_slug = m_slug.group(1)
+
+    # If a folder with this name already exists but belongs to a different video, append the slug
+    try:
+        _c = docker_client.containers.get(QBT_CONTAINER)
+        vid_dir_check = f"/downloads/faphouse/#moved/{stem}"
+        if _c.exec_run(["test", "-d", vid_dir_check]).exit_code == 0 and fh_slug:
+            info_r = _c.exec_run(["cat", f"{vid_dir_check}/{stem}.info.json"])
+            existing_url = ""
+            if info_r.exit_code == 0:
+                try:
+                    existing_url = json.loads(info_r.output).get("source_url", "")
+                except Exception:
+                    pass
+            if existing_url and existing_url != source_url:
+                # Different video, same title — disambiguate with FH slug
+                stem = f"{stem} ({fh_slug})"
+                safe_name = f"{stem}.mp4"
+    except Exception:
+        pass
+
+    info_name = stem + ".info.json"
 
     metadata = {"title": title, "source_url": source_url, "models": models,
                 "studio": studio, "tags": tags, "duration": duration,
